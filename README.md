@@ -15,7 +15,7 @@ chrono = "0.4"
 ### Quick start:
 
 ```rs
-use nightscout_rs::NightscoutClient;
+use cinnamon::NightscoutClient;
 use chrono::{Duration, Utc};
 
 #[tokio::main]
