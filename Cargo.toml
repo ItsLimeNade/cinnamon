@@ -6,7 +6,7 @@ repository = "https://github.com/ItsLimeNade/cinnamon"
 authors = ["Limenade"]
 description = "A type-safe Nightscout client for Rust, aiming to simplify the interactions with the confusing Nightscout API."
 homepage = "https://github.com/ItsLimeNade/cinnamon?tab=readme-ov-file#cinnamon"
-readme = "https://github.com/ItsLimeNade/cinnamon?tab=readme-ov-file#cinnamon"
+readme = "./README.md"
 license = "MIT"
 keywords = ["diabetes", "nightscout", "api"]
 categories = ["api-bindings", "asynchronous", "data-structures", "science::bioinformatics", "web-programming::http-client"]
