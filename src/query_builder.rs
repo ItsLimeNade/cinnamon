@@ -1,3 +1,6 @@
+use crate::client;
+use crate::models::entries::SgvEntry;
+
 use super::client::NightscoutClient;
 use super::structs::endpoints::Endpoint;
 
@@ -7,6 +10,8 @@ use serde::de::DeserializeOwned;
 use std::future::{Future, IntoFuture};
 use std::marker::PhantomData;
 use std::pin::Pin;
+use reqwest::Method;
+use sha1::{Digest, Sha1};
 
 pub struct QueryBuilder<T> {
     client: NightscoutClient,
@@ -14,17 +19,21 @@ pub struct QueryBuilder<T> {
     from_date: Option<DateTime<Utc>>,
     to_date: Option<DateTime<Utc>>,
     count: usize,
+    method: Method,
+    id: Option<String>,
     _marker: PhantomData<T>,
 }
 
 impl<T> QueryBuilder<T> {
-    pub fn new(client: NightscoutClient, endpoint: Endpoint) -> Self {
+    pub fn new(client: NightscoutClient, endpoint: Endpoint, method: Method) -> Self {
         Self {
             client,
             endpoint,
             from_date: None,
             to_date: None,
             count: 10,
+            method,
+            id: None, 
             _marker: PhantomData,
         }
     }
@@ -43,45 +52,115 @@ impl<T> QueryBuilder<T> {
         self.count = count;
         self
     }
+
+    pub fn id(mut self, id: impl Into<String>) -> Self {
+        self.id = Some(id.into());
+        self
+    }
 }
 
 impl<T> IntoFuture for QueryBuilder<T>
 where
     T: DeserializeOwned + Send + 'static,
-{
+{   
     type Output = Result<Vec<T>, reqwest::Error>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send>>;
-
+    
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
+            let path = if let Some(id) = &self.id {
+                format!("{}/{}", self.endpoint.as_path(), id)
+            } else {
+                self.endpoint.as_path().to_string()
+            };
+
             let mut url = self
                 .client
                 .base_url
-                .join(self.endpoint.as_path())
+                .join(&path)
                 .expect("Error building the URL");
 
             {
                 let mut query = url.query_pairs_mut();
+                
+                if self.id.is_none() {
+                    query.append_pair("count", &self.count.to_string());
 
-                query.append_pair("count", &self.count.to_string());
+                    if let Some(from) = self.from_date {
+                        query.append_pair("find[dateString][$gte]", &from.to_rfc3339());
+                    }
 
-                if let Some(from) = self.from_date {
-                    query.append_pair("find[dateString][$gte]", &from.to_rfc3339());
-                }
-
-                if let Some(to) = self.to_date {
-                    query.append_pair("find[dateString][$lte]", &to.to_rfc3339());
+                    if let Some(to) = self.to_date {
+                        query.append_pair("find[dateString][$lte]", &to.to_rfc3339());
+                    }
                 }
             }
 
-            let mut request = self.client.http.get(url);
+            match self.method {
+                Method::GET => {
+                    let mut request = self.client.http.get(url);
+                    if let Some(secret) = &self.client.api_secret {
+                        let mut hasher = Sha1::new();
+                        hasher.update(secret.as_bytes());
 
-            if let Some(secret) = &self.client.api_secret {
-                request = request.header("api-secret", secret);
+                        let result = hasher.finalize();
+                        request = request.header("api-secret", format!("{:x}", result));
+                    }
+                    let response = request.send().await?;
+
+                    if self.id.is_some() {
+                        let item = response.json::<Vec<T>>().await?;
+                        Ok(item)
+                    } else {
+                        response.json::<Vec<T>>().await
+                    }
+                }
+                Method::DELETE => {
+                    if self.id.is_some() {
+                        let mut get_req = self.client.http.get(url.clone());
+                        get_req = self.client.auth(get_req);
+
+                        let item = get_req.send().await?.json::<Vec<T>>().await?;
+
+                        let mut del_req = self.client.http.delete(url);
+                        del_req = self.client.auth(del_req);
+
+                        del_req.send().await?;
+
+                        Ok(item)
+                    } else {
+                        let mut get_request = self.client.http.get(url.clone());
+                        get_request = self.client.auth(get_request);
+
+                        let get_response = get_request.send().await?;
+                        let items: Vec<serde_json::Value> = get_response.json().await?;
+
+                        for item in &items {
+                            if let Some(id) = item.get("_id").and_then(|v| v.as_str()) {
+                                let delete_path = format!("{}/{}", self.endpoint.as_path(), id);
+                                let delete_url = self.client.base_url.join(&delete_path)
+                                    .expect("Error building ID-based delete URL");
+
+                                let mut delete_req = self.client.http.delete(delete_url);
+                                if let Some(secret) = &self.client.api_secret {
+                                    let mut hasher = Sha1::new();
+                                    hasher.update(secret.as_bytes());
+
+                                    let result = hasher.finalize();
+                                    delete_req = delete_req.header("api-secret", format!("{:x}", result));
+                                }
+                                let _ = delete_req.send().await;
+                            }
+                        }
+
+                        let t_items: Vec<T> = serde_json::from_value(serde_json::Value::Array(items))
+                            .expect("Data format mismatch: Could not deserialize deleted items into T");
+
+                        Ok(t_items)
+                    }
+                }
+                _ => panic!("Method not supported by the QueryBuilder!"),
             }
-
-            let response = request.send().await?;
-            response.json::<Vec<T>>().await
         })
     }
 }
