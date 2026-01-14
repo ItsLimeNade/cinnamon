@@ -1,6 +1,3 @@
-use crate::client;
-use crate::models::entries::SgvEntry;
-
 use super::client::NightscoutClient;
 use super::structs::endpoints::Endpoint;
 
@@ -11,7 +8,6 @@ use std::future::{Future, IntoFuture};
 use std::marker::PhantomData;
 use std::pin::Pin;
 use reqwest::Method;
-use sha1::{Digest, Sha1};
 
 pub struct QueryBuilder<T> {
     client: NightscoutClient,
@@ -99,13 +95,9 @@ where
             match self.method {
                 Method::GET => {
                     let mut request = self.client.http.get(url);
-                    if let Some(secret) = &self.client.api_secret {
-                        let mut hasher = Sha1::new();
-                        hasher.update(secret.as_bytes());
-
-                        let result = hasher.finalize();
-                        request = request.header("api-secret", format!("{:x}", result));
-                    }
+                    
+                    request = self.client.auth(request);
+                    
                     let response = request.send().await?;
 
                     if self.id.is_some() {
@@ -123,6 +115,7 @@ where
                         let item = get_req.send().await?.json::<Vec<T>>().await?;
 
                         let mut del_req = self.client.http.delete(url);
+                        
                         del_req = self.client.auth(del_req);
 
                         del_req.send().await?;
@@ -142,13 +135,9 @@ where
                                     .expect("Error building ID-based delete URL");
 
                                 let mut delete_req = self.client.http.delete(delete_url);
-                                if let Some(secret) = &self.client.api_secret {
-                                    let mut hasher = Sha1::new();
-                                    hasher.update(secret.as_bytes());
-
-                                    let result = hasher.finalize();
-                                    delete_req = delete_req.header("api-secret", format!("{:x}", result));
-                                }
+                                
+                                delete_req = self.client.auth(delete_req);
+                                
                                 let _ = delete_req.send().await;
                             }
                         }

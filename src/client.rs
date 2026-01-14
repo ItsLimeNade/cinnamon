@@ -1,12 +1,10 @@
-use super::query_builder::QueryBuilder;
 use super::structs;
 use sha1::{Digest, Sha1};
 use structs::endpoints::Endpoint;
-use structs::entries::{MbgEntry, SgvEntry};
 use structs::treatments::{IobData, IobWrapper};
 
 use anyhow::Result;
-use reqwest::{Client as HttpClient, Method};
+use reqwest::{Client as HttpClient};
 use url::Url;
 
 #[derive(Clone)]
@@ -50,9 +48,7 @@ impl NightscoutClient {
 
         let mut request = self.http.get(url);
 
-        if let Some(secret) = &self.api_secret {
-            request = request.header("api-secret", secret);
-        }
+        request = self.auth(request);
 
         let res = request.send().await?;
         let wrapper = res.json::<IobWrapper>().await?;
@@ -60,4 +56,3 @@ impl NightscoutClient {
         Ok(wrapper.iob)
     }
 }
-

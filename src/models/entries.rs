@@ -5,7 +5,6 @@ use crate::client::NightscoutClient;
 use crate::structs::trends::Trend;
 use crate::query_builder::QueryBuilder;
 use crate::structs::endpoints::Endpoint;
-use sha1::{Digest, Sha1};
 
 pub struct EntriesService {
     pub client: NightscoutClient
@@ -57,9 +56,8 @@ impl SgvService {
 
         let mut request = self.client.http.get(url);
 
-        if let Some(secret) = &self.client.api_secret {
-            request = request.header("api-secret", secret);
-        }
+        // CHANGE: Use centralized auth
+        request = self.client.auth(request);
 
         let res = request.send().await?;
 
@@ -77,13 +75,7 @@ impl SgvService {
 
         let mut request = self.client.http.post(url);
 
-        if let Some(secret) = &self.client.api_secret {
-            let mut hasher = Sha1::new();
-            hasher.update(secret.as_bytes());
-
-            let result = hasher.finalize();
-            request = request.header("api-secret", format!("{:x}", result));
-        }
+        request = self.client.auth(request);
 
         let response = request.json(&entries).send().await?;
 
