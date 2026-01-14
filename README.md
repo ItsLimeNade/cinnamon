@@ -81,12 +81,12 @@ let stats = client.properties()
     .send()
     .await?;
 
-if let Some(iob) = stats.iob {
-    println!("IOB: {} U (Source: {})", iob.iob, iob.source);
+if let Some(iob_data) = stats.iob {
+    println!("IOB: {} U (Source: {})", iob_data.iob, iob_data.source);
 }
 
-if let Some(cob) = stats.cob {
-    println!("COB: {} g", cob.cob);
+if let Some(cob_data) = stats.cob {
+    println!("COB: {} g", cob_data.cob);
 }
 
 ```
