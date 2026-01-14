@@ -281,7 +281,7 @@ impl PropertiesRequest {
         let base_path = Endpoint::Properties.as_path();
 
         let path = if self.requested_properties.is_empty() {
-            base_path.to_string()
+            format!("{}.json", base_path)
         } else {
             let joined = self
                 .requested_properties

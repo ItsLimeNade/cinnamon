@@ -19,7 +19,7 @@ impl Endpoint {
             Endpoint::Mbg => "api/v2/entries/mbg.json",
             Endpoint::Iob => "api/v2/properties/iob.json",
             Endpoint::Treatments => "api/v2/treatments.json",
-            Endpoint::Properties => "api/v2/properties.json",
+            Endpoint::Properties => "api/v2/properties",
             Endpoint::DeviceStatus => "api/v2/devicestatus.json",
             Endpoint::Profile => "api/v2/profile.json",
         }
