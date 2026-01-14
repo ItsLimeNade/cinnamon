@@ -5,7 +5,7 @@ pub enum Endpoint {
     Entries,
     Current,
     Treatments,
-    Properties
+    Properties,
 }
 
 impl Endpoint {
@@ -21,4 +21,3 @@ impl Endpoint {
         }
     }
 }
-

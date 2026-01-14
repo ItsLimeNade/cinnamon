@@ -1,12 +1,12 @@
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::collections::HashMap;
-use std::fmt;
-use chrono::{DateTime, Utc};
 use crate::client::NightscoutClient;
 use crate::endpoints::Endpoint;
 use crate::error::NightscoutError;
 use crate::models::treatments::Treatment;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::HashMap;
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PropertyType {
@@ -64,31 +64,30 @@ impl fmt::Display for PropertyType {
     }
 }
 
-
 /// The main response object for /api/v2/properties
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Properties {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bgnow: Option<BgNow>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub buckets: Option<Vec<Bucket>>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub delta: Option<Delta>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub direction: Option<Direction>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub iob: Option<IobProperty>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cob: Option<Cob>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub basal: Option<Basal>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub upbat: Option<Upbat>,
 
@@ -163,7 +162,7 @@ pub struct Direction {
 pub struct Upbat {
     pub display: String,
     // devices is sometimes a Map, sometimes empty. Value is safest.
-    pub devices: Option<Value>, 
+    pub devices: Option<Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -216,7 +215,6 @@ pub struct DbSize {
 pub struct RuntimeState {
     pub state: String,
 }
-
 
 pub struct PropertiesService {
     pub client: NightscoutClient,
@@ -281,11 +279,12 @@ impl PropertiesRequest {
 
     pub async fn send(self) -> Result<Properties, NightscoutError> {
         let base_path = Endpoint::Properties.as_path();
-        
+
         let path = if self.requested_properties.is_empty() {
             base_path.to_string()
         } else {
-            let joined = self.requested_properties
+            let joined = self
+                .requested_properties
                 .iter()
                 .map(|p| p.to_string())
                 .collect::<Vec<String>>()
@@ -296,14 +295,15 @@ impl PropertiesRequest {
         let mut url = self.client.base_url.join(&path)?;
 
         if let Some(time) = self.at_time {
-            url.query_pairs_mut().append_pair("time", &time.to_rfc3339());
+            url.query_pairs_mut()
+                .append_pair("time", &time.to_rfc3339());
         }
 
         let mut request = self.client.http.get(url);
         request = self.client.auth(request);
 
         let response = self.client.send_checked(request).await?;
-        
+
         let data = response.json::<Properties>().await?;
 
         Ok(data)

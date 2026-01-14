@@ -9,9 +9,9 @@ use std::pin::Pin;
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use serde::de::DeserializeOwned;
-use reqwest::Method;
 use futures::stream::{self, StreamExt};
+use reqwest::Method;
+use serde::de::DeserializeOwned;
 
 pub struct QueryBuilder<T> {
     client: NightscoutClient,
@@ -33,7 +33,7 @@ impl<T> QueryBuilder<T> {
             to_date: None,
             count: 10,
             method,
-            id: None, 
+            id: None,
             _marker: PhantomData,
         }
     }
@@ -62,10 +62,10 @@ impl<T> QueryBuilder<T> {
 impl<T> IntoFuture for QueryBuilder<T>
 where
     T: DeserializeOwned + Send + Sync + 'static, // Added Sync mostly for safety in async iterators
-{   
+{
     type Output = Result<Vec<T>, NightscoutError>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send>>;
-    
+
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
             let path = if let Some(id) = &self.id {
@@ -78,7 +78,7 @@ where
 
             {
                 let mut query = url.query_pairs_mut();
-                
+
                 if self.id.is_none() {
                     query.append_pair("count", &self.count.to_string());
 
@@ -96,7 +96,7 @@ where
                 Method::GET => {
                     let mut request = self.client.http.get(url);
                     request = self.client.auth(request);
-                    
+
                     let response = self.client.send_checked(request).await?;
 
                     if self.id.is_some() {
@@ -111,7 +111,12 @@ where
                         // Single ID delete logic
                         let mut get_req = self.client.http.get(url.clone());
                         get_req = self.client.auth(get_req);
-                        let item = self.client.send_checked(get_req).await?.json::<Vec<T>>().await?;
+                        let item = self
+                            .client
+                            .send_checked(get_req)
+                            .await?
+                            .json::<Vec<T>>()
+                            .await?;
 
                         let mut del_req = self.client.http.delete(url);
                         del_req = self.client.auth(del_req);
@@ -125,7 +130,8 @@ where
                         let get_response = self.client.send_checked(get_request).await?;
                         let items: Vec<serde_json::Value> = get_response.json().await?;
 
-                        let delete_urls: Vec<reqwest::Url> = items.iter()
+                        let delete_urls: Vec<reqwest::Url> = items
+                            .iter()
                             .filter_map(|item| {
                                 let id = item.get("_id")?.as_str()?;
                                 let delete_path = format!("{}/{}", self.endpoint.as_path(), id);
@@ -147,7 +153,8 @@ where
                             .collect::<Vec<_>>()
                             .await;
 
-                        let t_items: Vec<T> = serde_json::from_value(serde_json::Value::Array(items))?;
+                        let t_items: Vec<T> =
+                            serde_json::from_value(serde_json::Value::Array(items))?;
                         Ok(t_items)
                     }
                 }

@@ -1,50 +1,54 @@
-use chrono::{DateTime, Utc};
-use reqwest::Method;
-use serde::{Deserialize, Serialize};
 use crate::client::NightscoutClient;
+use crate::endpoints::Endpoint;
 use crate::error::NightscoutError;
 use crate::models::trends::Trend;
 use crate::query_builder::QueryBuilder;
-use crate::endpoints::Endpoint;
+use chrono::{DateTime, Utc};
+use reqwest::Method;
+use serde::{Deserialize, Serialize};
 
 pub struct EntriesService {
-    pub client: NightscoutClient
+    pub client: NightscoutClient,
 }
 
 pub struct SgvService {
-    pub client: NightscoutClient
+    pub client: NightscoutClient,
 }
 
 pub struct MbgService {
-    pub client: NightscoutClient
+    pub client: NightscoutClient,
 }
 
 impl EntriesService {
     pub fn sgv(&self) -> SgvService {
-        SgvService { client: self.client.clone() }
+        SgvService {
+            client: self.client.clone(),
+        }
     }
 
     pub fn mbg(&self) -> MbgService {
-        MbgService { client: self.client.clone() }
+        MbgService {
+            client: self.client.clone(),
+        }
     }
 }
 
 impl SgvService {
     /// Returns a query builder used to create your request
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```
     /// use cinnamon::client::NightscoutClient;
-    /// 
+    ///
     /// let URL = "https://www.example_url.com/";
     /// let SECRET = "SecretPasss";
-    /// 
+    ///
     /// let client = NightscoutClient::new(URL, SECRET);
     /// let entries: Vec<SgvEntry> = client.entries().sgv()
     ///                 .list()
     ///                 .from(Utc::now() - Duration::hours(24))
-    ///                 .to(Utc::now() - Duration::hours(20)) 
+    ///                 .to(Utc::now() - Duration::hours(20))
     ///                 .limit(10)
     ///                 .await?;
     pub fn list(&self) -> QueryBuilder<SgvEntry> {
@@ -57,10 +61,7 @@ impl SgvService {
 
     /// Fetches the latest available SGV entry.
     pub async fn latest(&self) -> Result<SgvEntry, NightscoutError> {
-        let url = self
-            .client
-            .base_url
-            .join(Endpoint::Current.as_path())?;
+        let url = self.client.base_url.join(Endpoint::Current.as_path())?;
 
         let mut request = self.client.http.get(url);
 
@@ -69,9 +70,7 @@ impl SgvService {
         let res = self.client.send_checked(request).await?;
 
         let resp = res.json::<Vec<SgvEntry>>().await?;
-        resp.first()
-            .cloned()
-            .ok_or(NightscoutError::NotFound)
+        resp.first().cloned().ok_or(NightscoutError::NotFound)
     }
 
     pub async fn create(&self, entries: Vec<SgvEntry>) -> Result<Vec<SgvEntry>, NightscoutError> {
@@ -89,7 +88,6 @@ impl SgvService {
 
         Ok(response.json::<Vec<SgvEntry>>().await?)
     }
-
 }
 
 impl MbgService {
@@ -104,7 +102,7 @@ impl MbgService {
     pub async fn latest(&self) -> Result<MbgEntry, NightscoutError> {
         let builder = self.list().limit(1);
         let result = builder.await?;
-        
+
         result.first().cloned().ok_or(NightscoutError::NotFound)
     }
 
@@ -120,9 +118,8 @@ impl MbgService {
     }
 }
 
-
 /// SGV (Sensor Glucose Value)
-/// 
+///
 /// This struct represents blood glucose values automatically entered by a CGM (continuous glucose monitor)
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SgvEntry {
@@ -159,15 +156,15 @@ impl SgvEntry {
 }
 
 /// MBG (Meter Blood Glucose)
-/// 
+///
 /// This struct represents blood glucose data manually entered by the user, often obtained via a fingerprick.
-/// 
+///
 /// https://en.wikipedia.org/wiki/Fingerstick
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MbgEntry {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
-    pub mbg: i32, 
+    pub mbg: i32,
     pub date: i64,
     #[serde(rename = "dateString")]
     pub date_string: String,

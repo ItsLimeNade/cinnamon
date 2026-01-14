@@ -1,11 +1,10 @@
-use serde::{Deserialize, Serialize};
 use reqwest::Method;
+use serde::{Deserialize, Serialize};
 
 use crate::client::NightscoutClient;
-use crate::query_builder::QueryBuilder;
 use crate::endpoints::Endpoint;
 use crate::error::NightscoutError;
-
+use crate::query_builder::QueryBuilder;
 
 #[derive(Debug, Deserialize)]
 pub struct IobWrapper {
@@ -27,7 +26,7 @@ pub struct IobData {
 pub struct Treatment {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
-    
+
     #[serde(rename = "eventType")]
     pub event_type: String,
 
@@ -71,7 +70,10 @@ impl TreatmentsService {
     }
 
     /// Creates new treatments
-    pub async fn create(&self, treatments: Vec<Treatment>) -> Result<Vec<Treatment>, NightscoutError> {
+    pub async fn create(
+        &self,
+        treatments: Vec<Treatment>,
+    ) -> Result<Vec<Treatment>, NightscoutError> {
         let url = self.client.base_url.join(Endpoint::Treatments.as_path())?;
 
         let mut request = self.client.http.post(url);

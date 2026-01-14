@@ -1,20 +1,20 @@
 use super::error::NightscoutError;
 
-use sha1::{Digest, Sha1};
 use anyhow::Result;
 use reqwest::{Client as HttpClient, Response};
+use sha1::{Digest, Sha1};
 use url::Url;
 
-use crate::models::treatments::TreatmentsService;
 use crate::models::entries::EntriesService;
 use crate::models::properties::PropertiesService;
+use crate::models::treatments::TreatmentsService;
 
 #[derive(Clone)]
 pub struct NightscoutClient {
     pub base_url: Url,
     pub api_secret: Option<String>,
     pub http: HttpClient,
-    pub api_secret_hash: Option<String>
+    pub api_secret_hash: Option<String>,
 }
 
 impl NightscoutClient {
@@ -23,14 +23,14 @@ impl NightscoutClient {
             let mut hasher = Sha1::new();
             hasher.update(secret.as_bytes());
             let result = hasher.finalize();
-            format!("{:x}", result) 
+            format!("{:x}", result)
         });
 
         Ok(Self {
             base_url: Url::parse(base_url)?,
             http: HttpClient::new(),
             api_secret,
-            api_secret_hash: hash
+            api_secret_hash: hash,
         })
     }
 
@@ -60,19 +60,25 @@ impl NightscoutClient {
         }
     }
 
-    pub async fn send_checked(&self, request: reqwest::RequestBuilder) -> Result<Response, NightscoutError> {
+    pub async fn send_checked(
+        &self,
+        request: reqwest::RequestBuilder,
+    ) -> Result<Response, NightscoutError> {
         let response = request.send().await?;
-        
+
         if response.status().is_success() {
             Ok(response)
         } else {
             let status = response.status();
-            let message = response.text().await.unwrap_or_else(|_| "Unknown API error".to_string());
-            
+            let message = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown API error".to_string());
+
             if status == reqwest::StatusCode::UNAUTHORIZED {
                 return Err(NightscoutError::AuthError);
             }
-            
+
             Err(NightscoutError::ApiError { status, message })
         }
     }
