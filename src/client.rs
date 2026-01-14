@@ -1,10 +1,12 @@
 use super::structs;
+use super::error::NightscoutError;
+
 use sha1::{Digest, Sha1};
 use structs::endpoints::Endpoint;
 use structs::treatments::{IobData, IobWrapper};
 
 use anyhow::Result;
-use reqwest::{Client as HttpClient};
+use reqwest::{Client as HttpClient, Response};
 use url::Url;
 
 #[derive(Clone)]
@@ -16,7 +18,7 @@ pub struct NightscoutClient {
 }
 
 impl NightscoutClient {
-    pub fn new(base_url: &str, api_secret: Option<String>) -> Result<Self> {
+    pub fn new(base_url: &str, api_secret: Option<String>) -> Result<Self, NightscoutError> {
         let hash = api_secret.clone().map(|secret| {
             let mut hasher = Sha1::new();
             hasher.update(secret.as_bytes());
@@ -40,7 +42,24 @@ impl NightscoutClient {
         }
     }
 
-    pub async fn iob(&self) -> reqwest::Result<IobData> {
+    pub async fn send_checked(&self, request: reqwest::RequestBuilder) -> Result<Response, NightscoutError> {
+        let response = request.send().await?;
+        
+        if response.status().is_success() {
+            Ok(response)
+        } else {
+            let status = response.status();
+            let message = response.text().await.unwrap_or_else(|_| "Unknown API error".to_string());
+            
+            if status == reqwest::StatusCode::UNAUTHORIZED {
+                return Err(NightscoutError::AuthError);
+            }
+            
+            Err(NightscoutError::ApiError { status, message })
+        }
+    }
+
+    pub async fn iob(&self) -> Result<IobData, NightscoutError> {
         let url = self
             .base_url
             .join(Endpoint::Iob.as_path())
@@ -50,7 +69,7 @@ impl NightscoutClient {
 
         request = self.auth(request);
 
-        let res = request.send().await?;
+        let res = self.send_checked(request).await?;
         let wrapper = res.json::<IobWrapper>().await?;
 
         Ok(wrapper.iob)

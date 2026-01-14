@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use crate::client::NightscoutClient;
+use crate::error::NightscoutError;
 use crate::structs::trends::Trend;
 use crate::query_builder::QueryBuilder;
 use crate::structs::endpoints::Endpoint;
@@ -47,26 +48,25 @@ impl SgvService {
     }
 
     /// Fetches the latest available SGV entry.
-    pub async fn latest(&self) -> reqwest::Result<SgvEntry> {
+    pub async fn latest(&self) -> Result<SgvEntry, NightscoutError> {
         let url = self
             .client
             .base_url
-            .join(Endpoint::Current.as_path())
-            .expect("Error building the URL");
+            .join(Endpoint::Current.as_path())?;
 
         let mut request = self.client.http.get(url);
 
-        // CHANGE: Use centralized auth
         request = self.client.auth(request);
 
-        let res = request.send().await?;
+        let res = self.client.send_checked(request).await?;
 
         let resp = res.json::<Vec<SgvEntry>>().await?;
-        let data = resp.first().expect("No data was found");
-        Ok(data.clone())
+        resp.first()
+            .cloned()
+            .ok_or(NightscoutError::NotFound)
     }
 
-    pub async fn create(&self, entries: Vec<SgvEntry>) -> reqwest::Result<Vec<SgvEntry>> {
+    pub async fn create(&self, entries: Vec<SgvEntry>) -> Result<Vec<SgvEntry>, NightscoutError> {
         let url = self
             .client
             .base_url
@@ -77,9 +77,9 @@ impl SgvService {
 
         request = self.client.auth(request);
 
-        let response = request.json(&entries).send().await?;
+        let response = self.client.send_checked(request.json(&entries)).await?;
 
-        response.json::<Vec<SgvEntry>>().await
+        Ok(response.json::<Vec<SgvEntry>>().await?)
     }
 
 }

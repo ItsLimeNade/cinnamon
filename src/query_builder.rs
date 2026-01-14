@@ -1,3 +1,5 @@
+use crate::error::NightscoutError;
+
 use super::client::NightscoutClient;
 use super::structs::endpoints::Endpoint;
 
@@ -59,7 +61,7 @@ impl<T> IntoFuture for QueryBuilder<T>
 where
     T: DeserializeOwned + Send + 'static,
 {   
-    type Output = Result<Vec<T>, reqwest::Error>;
+    type Output = Result<Vec<T>, NightscoutError>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send>>;
     
     fn into_future(self) -> Self::IntoFuture {
@@ -73,8 +75,7 @@ where
             let mut url = self
                 .client
                 .base_url
-                .join(&path)
-                .expect("Error building the URL");
+                .join(&path)?;
 
             {
                 let mut query = url.query_pairs_mut();
@@ -98,13 +99,13 @@ where
                     
                     request = self.client.auth(request);
                     
-                    let response = request.send().await?;
+                    let response = self.client.send_checked(request).await?;
 
                     if self.id.is_some() {
                         let item = response.json::<Vec<T>>().await?;
                         Ok(item)
                     } else {
-                        response.json::<Vec<T>>().await
+                        Ok(response.json::<Vec<T>>().await?)
                     }
                 }
                 Method::DELETE => {
@@ -125,30 +126,28 @@ where
                         let mut get_request = self.client.http.get(url.clone());
                         get_request = self.client.auth(get_request);
 
-                        let get_response = get_request.send().await?;
+                        let get_response = self.client.send_checked(get_request).await?;
                         let items: Vec<serde_json::Value> = get_response.json().await?;
 
                         for item in &items {
                             if let Some(id) = item.get("_id").and_then(|v| v.as_str()) {
                                 let delete_path = format!("{}/{}", self.endpoint.as_path(), id);
-                                let delete_url = self.client.base_url.join(&delete_path)
-                                    .expect("Error building ID-based delete URL");
+                                let delete_url = self.client.base_url.join(&delete_path)?;
 
                                 let mut delete_req = self.client.http.delete(delete_url);
                                 
                                 delete_req = self.client.auth(delete_req);
                                 
-                                let _ = delete_req.send().await;
+                                let _ = self.client.send_checked(delete_req).await;
                             }
                         }
 
-                        let t_items: Vec<T> = serde_json::from_value(serde_json::Value::Array(items))
-                            .expect("Data format mismatch: Could not deserialize deleted items into T");
+                        let t_items: Vec<T> = serde_json::from_value(serde_json::Value::Array(items))?;
 
                         Ok(t_items)
                     }
                 }
-                _ => panic!("Method not supported by the QueryBuilder!"),
+                _ => Err(NightscoutError::Unknown),
             }
         })
     }
