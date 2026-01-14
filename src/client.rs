@@ -5,7 +5,9 @@ use reqwest::{Client as HttpClient, Response};
 use sha1::{Digest, Sha1};
 use url::Url;
 
+use crate::models::devicestatus::DeviceStatusService;
 use crate::models::entries::EntriesService;
+use crate::models::profile::ProfileService;
 use crate::models::properties::PropertiesService;
 use crate::models::treatments::TreatmentsService;
 
@@ -56,6 +58,18 @@ impl NightscoutClient {
 
     pub fn properties(&self) -> PropertiesService {
         PropertiesService {
+            client: self.clone(),
+        }
+    }
+
+    pub fn devicestatus(&self) -> DeviceStatusService {
+        DeviceStatusService {
+            client: self.clone(),
+        }
+    }
+
+    pub fn profiles(&self) -> ProfileService {
+        ProfileService {
             client: self.clone(),
         }
     }

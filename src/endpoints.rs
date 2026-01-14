@@ -3,9 +3,11 @@ pub enum Endpoint {
     Mbg,
     Iob,
     Entries,
-    Current,
     Treatments,
     Properties,
+    Current,
+    DeviceStatus,
+    Profile,
 }
 
 impl Endpoint {
@@ -16,8 +18,10 @@ impl Endpoint {
             Endpoint::Sgv => "api/v2/entries/sgv.json",
             Endpoint::Mbg => "api/v2/entries/mbg.json",
             Endpoint::Iob => "api/v2/properties/iob.json",
-            Endpoint::Treatments => "api/v1/treatments.json",
+            Endpoint::Treatments => "api/v2/treatments.json",
             Endpoint::Properties => "api/v2/properties.json",
+            Endpoint::DeviceStatus => "api/v2/devicestatus.json",
+            Endpoint::Profile => "api/v2/profile.json",
         }
     }
 }
