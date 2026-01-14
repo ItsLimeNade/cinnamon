@@ -3,9 +3,9 @@ use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use crate::client::NightscoutClient;
 use crate::error::NightscoutError;
-use crate::structs::trends::Trend;
+use crate::models::trends::Trend;
 use crate::query_builder::QueryBuilder;
-use crate::structs::endpoints::Endpoint;
+use crate::endpoints::Endpoint;
 
 pub struct EntriesService {
     pub client: NightscoutClient
@@ -15,9 +15,17 @@ pub struct SgvService {
     pub client: NightscoutClient
 }
 
+pub struct MbgService {
+    pub client: NightscoutClient
+}
+
 impl EntriesService {
     pub fn sgv(&self) -> SgvService {
         SgvService { client: self.client.clone() }
+    }
+
+    pub fn mbg(&self) -> MbgService {
+        MbgService { client: self.client.clone() }
     }
 }
 
@@ -84,6 +92,34 @@ impl SgvService {
 
 }
 
+impl MbgService {
+    pub fn list(&self) -> QueryBuilder<MbgEntry> {
+        QueryBuilder::<MbgEntry>::new(self.client.clone(), Endpoint::Mbg, Method::GET)
+    }
+
+    pub fn delete(&self) -> QueryBuilder<MbgEntry> {
+        QueryBuilder::<MbgEntry>::new(self.client.clone(), Endpoint::Mbg, Method::DELETE)
+    }
+
+    pub async fn latest(&self) -> Result<MbgEntry, NightscoutError> {
+        let builder = self.list().limit(1);
+        let result = builder.await?;
+        
+        result.first().cloned().ok_or(NightscoutError::NotFound)
+    }
+
+    pub async fn create(&self, entries: Vec<MbgEntry>) -> Result<Vec<MbgEntry>, NightscoutError> {
+        let url = self.client.base_url.join(Endpoint::Entries.as_path())?;
+
+        let mut request = self.client.http.post(url);
+        request = self.client.auth(request);
+
+        let response = self.client.send_checked(request.json(&entries)).await?;
+
+        Ok(response.json::<Vec<MbgEntry>>().await?)
+    }
+}
+
 
 /// SGV (Sensor Glucose Value)
 /// 
@@ -92,7 +128,7 @@ impl SgvService {
 pub struct SgvEntry {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
-    pub sgv: i64,
+    pub sgv: i32,
     pub date: i64,
     #[serde(rename = "dateString")]
     pub date_string: String,
@@ -104,7 +140,7 @@ pub struct SgvEntry {
 }
 
 impl SgvEntry {
-    pub fn new(sgv: i64, direction: Trend, date: DateTime<Utc>) -> Self {
+    pub fn new(sgv: i32, direction: Trend, date: DateTime<Utc>) -> Self {
         SgvEntry {
             id: None,
             sgv,
@@ -127,14 +163,34 @@ impl SgvEntry {
 /// This struct represents blood glucose data manually entered by the user, often obtained via a fingerprick.
 /// 
 /// https://en.wikipedia.org/wiki/Fingerstick
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MbgEntry {
-    #[serde(rename = "_id")]
-    pub id: String,
-    pub mbg: u16,
-    pub date: u64,
+    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    pub mbg: i32, 
+    pub date: i64,
     #[serde(rename = "dateString")]
     pub date_string: String,
     #[serde(rename = "type")]
     pub type_: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub device: Option<String>,
+}
+
+impl MbgEntry {
+    pub fn new(mbg: i32, date: DateTime<Utc>) -> Self {
+        MbgEntry {
+            id: None,
+            mbg,
+            date: date.timestamp_millis(),
+            date_string: date.to_rfc3339(),
+            type_: "mbg".to_string(),
+            device: Some("cinnamon".to_string()),
+        }
+    }
+
+    pub fn device(mut self, name: String) -> Self {
+        self.device = Some(name);
+        self
+    }
 }

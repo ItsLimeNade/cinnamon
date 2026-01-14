@@ -1,7 +1,7 @@
 use crate::error::NightscoutError;
 
 use super::client::NightscoutClient;
-use super::structs::endpoints::Endpoint;
+use crate::endpoints::Endpoint;
 
 use std::future::{Future, IntoFuture};
 use std::marker::PhantomData;

@@ -4,6 +4,7 @@ pub enum Endpoint {
     Iob,
     Entries,
     Current,
+    Treatments
 }
 
 impl Endpoint {
@@ -14,6 +15,7 @@ impl Endpoint {
             Endpoint::Sgv => "api/v2/entries/sgv.json",
             Endpoint::Mbg => "api/v2/entries/mbg.json",
             Endpoint::Iob => "api/v2/properties/iob.json",
+            Endpoint::Treatments => "api/v1/treatments.json",
         }
     }
 }

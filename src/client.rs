@@ -1,13 +1,12 @@
-use super::structs;
 use super::error::NightscoutError;
 
 use sha1::{Digest, Sha1};
-use structs::endpoints::Endpoint;
-use structs::treatments::{IobData, IobWrapper};
-
 use anyhow::Result;
 use reqwest::{Client as HttpClient, Response};
 use url::Url;
+
+use crate::models::treatments::TreatmentsService;
+use crate::models::entries::EntriesService;
 
 #[derive(Clone)]
 pub struct NightscoutClient {
@@ -42,6 +41,18 @@ impl NightscoutClient {
         }
     }
 
+    pub fn treatments(&self) -> TreatmentsService {
+        TreatmentsService {
+            client: self.clone(),
+        }
+    }
+
+    pub fn entries(&self) -> EntriesService {
+        EntriesService {
+            client: self.clone(),
+        }
+    }
+
     pub async fn send_checked(&self, request: reqwest::RequestBuilder) -> Result<Response, NightscoutError> {
         let response = request.send().await?;
         
@@ -59,19 +70,19 @@ impl NightscoutClient {
         }
     }
 
-    pub async fn iob(&self) -> Result<IobData, NightscoutError> {
-        let url = self
-            .base_url
-            .join(Endpoint::Iob.as_path())
-            .expect("Error building the URL");
+    // pub async fn iob(&self) -> Result<IobData, NightscoutError> {
+    //     let url = self
+    //         .base_url
+    //         .join(Endpoint::Iob.as_path())
+    //         .expect("Error building the URL");
 
-        let mut request = self.http.get(url);
+    //     let mut request = self.http.get(url);
 
-        request = self.auth(request);
+    //     request = self.auth(request);
 
-        let res = self.send_checked(request).await?;
-        let wrapper = res.json::<IobWrapper>().await?;
+    //     let res = self.send_checked(request).await?;
+    //     let wrapper = res.json::<IobWrapper>().await?;
 
-        Ok(wrapper.iob)
-    }
+    //     Ok(wrapper.iob)
+    // }
 }
