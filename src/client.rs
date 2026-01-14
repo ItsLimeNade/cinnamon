@@ -7,6 +7,7 @@ use url::Url;
 
 use crate::models::treatments::TreatmentsService;
 use crate::models::entries::EntriesService;
+use crate::models::properties::PropertiesService;
 
 #[derive(Clone)]
 pub struct NightscoutClient {
@@ -49,6 +50,12 @@ impl NightscoutClient {
 
     pub fn entries(&self) -> EntriesService {
         EntriesService {
+            client: self.clone(),
+        }
+    }
+
+    pub fn properties(&self) -> PropertiesService {
+        PropertiesService {
             client: self.clone(),
         }
     }
