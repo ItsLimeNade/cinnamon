@@ -13,6 +13,17 @@ use futures::stream::{self, StreamExt};
 use reqwest::Method;
 use serde::de::DeserializeOwned;
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum Device {
+    Auto,
+    All,
+    Custom(String),
+}
+
+pub trait HasDevice {
+    fn device(&self) -> Option<&str>;
+}
+
 pub struct QueryBuilder<T> {
     client: NightscoutClient,
     endpoint: Endpoint,
@@ -21,6 +32,7 @@ pub struct QueryBuilder<T> {
     count: usize,
     method: Method,
     id: Option<String>,
+    device: Device,
     _marker: PhantomData<T>,
 }
 
@@ -34,6 +46,7 @@ impl<T> QueryBuilder<T> {
             count: 10,
             method,
             id: None,
+            device: Device::All,
             _marker: PhantomData,
         }
     }
@@ -57,11 +70,16 @@ impl<T> QueryBuilder<T> {
         self.id = Some(id.into());
         self
     }
+
+    pub fn device(mut self, device: Device) -> Self {
+        self.device = device;
+        self
+    }
 }
 
 impl<T> IntoFuture for QueryBuilder<T>
 where
-    T: DeserializeOwned + Send + Sync + 'static, // Added Sync mostly for safety in async iterators
+    T: DeserializeOwned + Send + Sync + 'static + HasDevice,
 {
     type Output = Result<Vec<T>, NightscoutError>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send>>;
@@ -98,12 +116,33 @@ where
                     request = self.client.auth(request);
 
                     let response = self.client.send_checked(request).await?;
+                    let items = response.json::<Vec<T>>().await?;
 
-                    if self.id.is_some() {
-                        let item = response.json::<Vec<T>>().await?;
-                        Ok(item)
-                    } else {
-                        Ok(response.json::<Vec<T>>().await?)
+                    match &self.device {
+                        Device::All => Ok(items),
+                        Device::Custom(name) => {
+                            let filtered: Vec<T> = items
+                                .into_iter()
+                                .filter(|item| item.device() == Some(name.as_str()))
+                                .collect();
+                            Ok(filtered)
+                        }
+                        Device::Auto => {
+                            let target_device = items
+                                .iter()
+                                .find_map(|item| item.device())
+                                .map(|s| s.to_string());
+
+                            if let Some(device_name) = target_device {
+                                let filtered: Vec<T> = items
+                                    .into_iter()
+                                    .filter(|item| item.device() == Some(device_name.as_str()))
+                                    .collect();
+                                Ok(filtered)
+                            } else {
+                                Ok(items)
+                            }
+                        }
                     }
                 }
                 Method::DELETE => {

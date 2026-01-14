@@ -2,7 +2,7 @@ use crate::client::NightscoutClient;
 use crate::endpoints::Endpoint;
 use crate::error::NightscoutError;
 use crate::models::trends::Trend;
-use crate::query_builder::QueryBuilder;
+use crate::query_builder::{HasDevice, QueryBuilder};
 use chrono::{DateTime, Utc};
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
@@ -155,6 +155,12 @@ impl SgvEntry {
     }
 }
 
+impl HasDevice for SgvEntry {
+    fn device(&self) -> Option<&str> {
+        self.device.as_deref()
+    }
+}
+
 /// MBG (Meter Blood Glucose)
 ///
 /// This struct represents blood glucose data manually entered by the user, often obtained via a fingerprick.
@@ -189,5 +195,11 @@ impl MbgEntry {
     pub fn device(mut self, name: String) -> Self {
         self.device = Some(name);
         self
+    }
+}
+
+impl HasDevice for MbgEntry {
+    fn device(&self) -> Option<&str> {
+        self.device.as_deref()
     }
 }

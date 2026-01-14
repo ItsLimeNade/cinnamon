@@ -1,7 +1,7 @@
 use crate::client::NightscoutClient;
 use crate::endpoints::Endpoint;
 use crate::error::NightscoutError;
-use crate::query_builder::QueryBuilder;
+use crate::query_builder::{HasDevice, QueryBuilder};
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -63,4 +63,10 @@ pub struct DeviceStatus {
 
     #[serde(flatten)]
     pub extra: Value,
+}
+
+impl HasDevice for DeviceStatus {
+    fn device(&self) -> Option<&str> {
+        self.device.as_deref()
+    }
 }

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::client::NightscoutClient;
 use crate::endpoints::Endpoint;
 use crate::error::NightscoutError;
-use crate::query_builder::QueryBuilder;
+use crate::query_builder::{HasDevice, QueryBuilder};
 
 #[derive(Debug, Deserialize)]
 pub struct IobWrapper {
@@ -54,6 +54,13 @@ pub struct Treatment {
     #[serde(rename = "enteredBy", skip_serializing_if = "Option::is_none")]
     pub entered_by: Option<String>,
 }
+
+impl HasDevice for Treatment {
+    fn device(&self) -> Option<&str> {
+        self.entered_by.as_deref()
+    }
+}
+
 pub struct TreatmentsService {
     pub client: NightscoutClient,
 }
