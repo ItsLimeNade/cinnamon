@@ -1,6 +1,6 @@
+use chrono::Utc;
 use cinnamon::client::NightscoutClient;
 use cinnamon::models::treatments::Treatment;
-use chrono::Utc;
 use std::env;
 use std::error::Error;
 
@@ -18,14 +18,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
         notes: Some("Mid-afternoon snack via Cinnamon".to_string()),
         entered_by: Some("Cinnamon-Rust".to_string()),
         // Fill other fields with None
-        glucose: None, glucose_type: None, insulin: None, units: None,
+        glucose: None,
+        glucose_type: None,
+        insulin: None,
+        units: None,
     };
 
     println!("Uploading treatment.");
 
     // Send it
     let result = client.treatments().create(vec![snack]).await?;
-    
+
     println!("Success! Created treatment with ID: {:?}", result[0].id);
 
     Ok(())

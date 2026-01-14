@@ -9,7 +9,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let client = NightscoutClient::new(&url, None)?;
 
     // Request specific properties (faster than fetching everything)
-    let stats = client.properties()
+    let stats = client
+        .properties()
         .get()
         .only(&[PropertyType::Iob, PropertyType::Cob])
         .send()
