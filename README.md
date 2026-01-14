@@ -1,57 +1,127 @@
 # cinnamon
-A type-safe Nightscout client for Rust, aiming to simplify the interactions with the confusing Nightscout API.
 
+A type-safe, asynchronous Rust client for the Nightscout API (v1 & v2).
 
-## Basic usage:
-### Installation:
-Add this to your `Cargo.toml`
-```TOML
+Cinnamon aims to simplify interactions with Nightscout by providing strongly-typed structs for entries, treatments, profiles, and device status, handling authentication and error propagation automatically.
+
+## Installation
+
+Add this to your Cargo.toml:
+
+```toml
 [dependencies]
-cinnamon = "0.0.1"
+cinnamon = "0.1.0"
 tokio = { version = "1", features = ["full"] }
 chrono = "0.4"
+
 ```
 
-### Quick start:
+## Usage
 
-```rs
-use cinnamon::NightscoutClient;
-use chrono::{Duration, Utc};
+### Setup the Client
+
+Initialize the client with your Nightscout URL and optional API Secret.
+
+```rust
+use cinnamon::client::NightscoutClient;
+use std::env;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize the client
-    let url = "https://www.your-nightscout-url.com";
-    let token = Some("your-api-secret".to_string());
+    let url = "https://my-cgm.herokuapp.com";
+    let token = Some("my-api-secret-123".to_string());
+
+    let client = NightscoutClient::new(url, token)?;
     
-    let client = NightscoutClient::new(url, token).expect("Invalid URL");
-
-    // Fetch SGV Data
-    // Get the last 10 entries from the last 24 hours
-    println!("Fetching SGV entries...");
-    let entries = client.sgv()
-        .from(Utc::now() - Duration::hours(24))
-        .limit(10)
-        .await?;
-
-    for entry in entries {
-        println!("-> {} mg/dl at {}", entry.sgv, entry.date_string);
-    }
-
-    // Fetch IOB
-    println!("\nFetching IOB...");
-    let iob_data = client.iob().await?;
-    println!("-> Current IOB: {} U ({})", iob_data.iob, iob_data.display_line);
-
+    println!("Successfully connected to {}", client.base_url);
     Ok(())
 }
 
 ```
 
-## Important Disclaimer
-### This software is a Work In Progress (WIP) and is not production-ready.
+### Fetching Glucose Data (SGV)
 
-**NO MEDICAL ADVICE**: This library is for educational and informational purposes only. It is not intended to be relied upon for medical decisions, insulin dosing, or treatment adjustments. Always consult your primary glucose monitoring device (CGM/BGM) and official medical equipment before taking any action. 
+Retrieve the latest Sensor Glucose Value (SGV) or a list of historical entries.
+
+```rust
+use cinnamon::models::entries::SgvEntry;
+
+// ... inside main ...
+
+// Get the single latest entry
+match client.entries().sgv().latest().await {
+    Ok(entry) => {
+        println!("Latest BG: {} mg/dl", entry.sgv);
+        println!("Time: {}", entry.date_string);
+        println!("Trend: {:?}", entry.direction);
+    },
+    Err(e) => eprintln!("Error fetching SGV: {}", e),
+}
+
+// Fetch the last 10 entries
+let history = client.entries().sgv().list().limit(10).await?;
+for entry in history {
+    println!("[{}] {}", entry.date_string, entry.sgv);
+}
+
+```
+
+### Fetching System State (Properties)
+
+Use the V2 Properties API to check system states like Insulin On Board (IOB), Carbs On Board (COB), or Pump Status.
+
+```rust
+use cinnamon::models::properties::PropertyType;
+
+// ... inside main ...
+
+let stats = client.properties()
+    .get()
+    .only(&[PropertyType::Iob, PropertyType::Cob, PropertyType::Pump])
+    .send()
+    .await?;
+
+if let Some(iob) = stats.iob {
+    println!("IOB: {} U (Source: {})", iob.iob, iob.source);
+}
+
+if let Some(cob) = stats.cob {
+    println!("COB: {} g", cob.cob);
+}
+
+```
+
+### Uploading Treatments
+
+Upload insulin boluses, carb corrections, or other care events to Nightscout.
+
+```rust
+use cinnamon::models::treatments::Treatment;
+use chrono::Utc;
+
+// ... inside main ...
+
+let correction = Treatment {
+    id: None,
+    event_type: "Correction Bolus".to_string(),
+    created_at: Utc::now().to_rfc3339(),
+    insulin: Some(2.5),
+    notes: Some("Correction for high BG".to_string()),
+    entered_by: Some("Cinnamon-Rust".to_string()),
+    // Fill unused fields with None
+    glucose: None, glucose_type: None, carbs: None, units: None,
+};
+
+match client.treatments().create(vec![correction]).await {
+    Ok(_) => println!("Treatment uploaded successfully."),
+    Err(e) => eprintln!("Failed to upload: {}", e),
+}
+
+```
+
+## Disclaimer
+
+NO MEDICAL ADVICE: This library is for educational and informational purposes only. It is not intended to be relied upon for medical decisions, insulin dosing, or treatment adjustments. Always consult with a qualified healthcare professional.
 
 **If you have any concerns regarding your health or diabetes management, please contact your healthcare provider immediately.**
 
