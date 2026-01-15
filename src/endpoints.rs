@@ -8,6 +8,7 @@ pub enum Endpoint {
     Current,
     DeviceStatus,
     Profile,
+    Status,
 }
 
 impl Endpoint {
@@ -22,6 +23,7 @@ impl Endpoint {
             Endpoint::Properties => "api/v2/properties",
             Endpoint::DeviceStatus => "api/v2/devicestatus.json",
             Endpoint::Profile => "api/v2/profile.json",
+            Endpoint::Status => "api/v2/status.json",
         }
     }
 }
