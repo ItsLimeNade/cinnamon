@@ -40,9 +40,9 @@ pub struct ProfileSet {
     pub store: HashMap<String, ProfileConfig>,
 
     #[serde(rename = "mills")]
-    pub mills: i64,
+    pub mills: Option<i64>,
 
-    pub units: String,
+    pub units: Option<String>,
 
     #[napi(js_name = "createdAt")]
     pub created_at: String,
@@ -52,8 +52,8 @@ pub struct ProfileSet {
 #[napi(object)]
 pub struct ProfileConfig {
     pub dia: f64,
-    pub carbs_hr: f64,
-    pub delay: f64,
+    pub carbs_hr: Option<f64>,
+    pub delay: Option<f64>,
     pub timezone: String,
     pub units: String,
     pub carbratio: Vec<TimeSchedule>,
