@@ -45,7 +45,6 @@ pub struct ProfileSet {
     pub units: String,
 
     #[napi(js_name = "createdAt")]
-    #[serde(rename = "created_at")]
     pub created_at: String,
 }
 
@@ -53,7 +52,6 @@ pub struct ProfileSet {
 #[napi(object)]
 pub struct ProfileConfig {
     pub dia: f64,
-    #[serde(rename = "carbs_hr")]
     pub carbs_hr: f64,
     pub delay: f64,
     pub timezone: String,
@@ -61,9 +59,7 @@ pub struct ProfileConfig {
     pub carbratio: Vec<TimeSchedule>,
     pub sens: Vec<TimeSchedule>,
     pub basal: Vec<TimeSchedule>,
-    #[serde(rename = "target_low")]
     pub target_low: Vec<TimeSchedule>,
-    #[serde(rename = "target_high")]
     pub target_high: Vec<TimeSchedule>,
 }
 
