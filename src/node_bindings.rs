@@ -3,6 +3,7 @@ use crate::models::devicestatus::DeviceStatus;
 use crate::models::entries::{MbgEntry, SgvEntry};
 use crate::models::profile::{ProfileService, ProfileSet};
 use crate::models::properties::{Properties, PropertiesService, PropertyType};
+use crate::models::status::Status;
 use crate::models::treatments::Treatment;
 use crate::query_builder::Device;
 
@@ -92,6 +93,33 @@ impl Cinnamon {
             enabled: vec![],
             at: None,
         }
+    }
+
+    #[napi]
+    pub fn status(&self) -> JsStatusQuery {
+        JsStatusQuery {
+            client: self.client.clone(),
+        }
+    }
+}
+
+// -----------------------------
+// Status
+
+#[napi]
+pub struct JsStatusQuery {
+    client: NightscoutClient,
+}
+
+#[napi]
+impl JsStatusQuery {
+    #[napi]
+    pub async fn fetch(&self) -> Result<Status> {
+        self.client
+            .status()
+            .get()
+            .await
+            .map_err(|e| Error::from_reason(e.to_string()))
     }
 }
 
