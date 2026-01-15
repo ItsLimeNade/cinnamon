@@ -8,7 +8,7 @@
     },
     "scripts": {
         "build": "napi build --platform --release",
-        "artifacts": "napi artifacts ./artifacts"
+        "artifacts": "napi artifacts -d ./artifacts"
     },
     "devDependencies": {
         "@napi-rs/cli": "^3.5.1",
