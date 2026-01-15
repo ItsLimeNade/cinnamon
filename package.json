@@ -1,0 +1,21 @@
+{
+    "name": "cinnamon-rs",
+    "version": "0.1.1",
+    "main": "index.js",
+    "types": "index.d.ts",
+    "napi": {
+        "name": "cinnamon"
+    },
+    "scripts": {
+        "build": "napi build --platform --release",
+        "artifacts": "napi artifacts ./artifacts"
+    },
+    "devDependencies": {
+        "@napi-rs/cli": "^3.5.1",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.9.3"
+    },
+    "engines": {
+        "node": ">= 10"
+    }
+}

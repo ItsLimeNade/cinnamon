@@ -3,7 +3,9 @@ use crate::endpoints::Endpoint;
 use crate::error::NightscoutError;
 use crate::models::trends::Trend;
 use crate::query_builder::{HasDevice, QueryBuilder};
+
 use chrono::{DateTime, Utc};
+use napi_derive::napi;
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 
@@ -122,12 +124,14 @@ impl MbgService {
 ///
 /// This struct represents blood glucose values automatically entered by a CGM (continuous glucose monitor)
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[napi(object)]
 pub struct SgvEntry {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     pub sgv: i32,
     pub date: i64,
     #[serde(rename = "dateString")]
+    #[napi(js_name = "dateString")]
     pub date_string: String,
     pub direction: Trend,
     #[serde(rename = "type")]
@@ -167,12 +171,14 @@ impl HasDevice for SgvEntry {
 ///
 /// https://en.wikipedia.org/wiki/Fingerstick
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[napi(object)]
 pub struct MbgEntry {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     pub mbg: i32,
     pub date: i64,
     #[serde(rename = "dateString")]
+    #[napi(js_name = "dateString")]
     pub date_string: String,
     #[serde(rename = "type")]
     pub type_: String,
