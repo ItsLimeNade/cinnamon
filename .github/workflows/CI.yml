@@ -1,4 +1,5 @@
 name: CI
+
 env:
   DEBUG: napi:*
   APP_NAME: cinnamon
@@ -13,47 +14,54 @@ on:
     branches:
       - main
     tags:
-      - '[0-9]+.*'
-  pull_request: null
+      - 'v*' # Triggers on tags like v0.1.0 (ensure your tag matches this pattern!)
+  pull_request:
 
 jobs:
   build:
+    name: Build - ${{ matrix.settings.target }}
+    runs-on: ${{ matrix.settings.host }}
     strategy:
       fail-fast: false
       matrix:
         settings:
+          # MacOS (Apple Silicon) - Matches your package.json
           - host: macos-latest
-            target: x86_64-apple-darwin
+            target: aarch64-apple-darwin
             build: |
-              npm run build
+              npm run build -- --target aarch64-apple-darwin
               strip -x *.node
+
+          # Windows (x64 MSVC)
           - host: windows-latest
-            build: npm run build
             target: x86_64-pc-windows-msvc
+            build: npm run build -- --target x86_64-pc-windows-msvc
+
+          # Linux (x64 GNU) - Uses Docker to cross-compile
           - host: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian
             build: |-
-              set -e &&
-              npm run build -- --target x86_64-unknown-linux-gnu &&
+              npm run build -- --target x86_64-unknown-linux-gnu
               strip *.node
-    name: stable - ${{ matrix.settings.target }} - node@20
-    runs-on: ${{ matrix.settings.host }}
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup node
         uses: actions/setup-node@v4
         if: ${{ !matrix.settings.docker }}
         with:
           node-version: 20
-          check-latest: true
           cache: npm
-      - name: Install
+
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         if: ${{ !matrix.settings.docker }}
         with:
           toolchain: stable
           targets: ${{ matrix.settings.target }}
+
       - name: Cache cargo
         uses: actions/cache@v4
         with:
@@ -62,19 +70,23 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ matrix.settings.target }}-cargo-${{ matrix.settings.host }}
-      - uses: goto-bus-stop/setup-zig@v2
-        if: ${{ matrix.settings.target == 'armv7-unknown-linux-gnueabihf' }}
-        with:
-          version: 0.10.1
-      - name: Setup toolchain
-        run: ${{ matrix.settings.setup }}
-        if: ${{ matrix.settings.setup }}
-        shell: bash
+
       - name: Install dependencies
         run: npm install
-      - name: Build
+
+      - name: Build (Docker)
+        if: ${{ matrix.settings.docker }}
+        uses: addnab/docker-run-action@v3
+        with:
+          image: ${{ matrix.settings.docker }}
+          options: --user 0:0 -v ${{ github.workspace }}/.cargo-cache/git:/root/.cargo/git -v ${{ github.workspace }}/.cargo-cache/registry:/root/.cargo/registry -v ${{ github.workspace }}:/build -w /build
+          run: ${{ matrix.settings.build }}
+
+      - name: Build (Host)
+        if: ${{ !matrix.settings.docker }}
         run: ${{ matrix.settings.build }}
         shell: bash
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -83,33 +95,66 @@ jobs:
           if-no-files-found: error
 
   publish:
-    name: Publish
+    name: Publish to NPM & Crates.io
     runs-on: ubuntu-latest
     needs: build
+    # Only run on release tags (e.g. v0.1.0)
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup node
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          check-latest: true
           cache: npm
+
+      - name: Install Rust (for cargo publish)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
       - name: Install dependencies
         run: npm install
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-      - name: Flatten artifacts
-        run: |
-          find artifacts -type f -name "*.node" -exec mv -f {} artifacts/ \;
-      - name: Move artifacts
+
+      - name: Move artifacts to npm folders
         run: npm run artifacts
-      - name: Publish
-        run: |
-          npm config set //registry.npmjs.org/:_authToken=$NPM_TOKEN
-          npm publish --access public
+
+      - name: Publish to NPM
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm config set //registry.npmjs.org/:_authToken=$NPM_TOKEN
+          
+          # 1. Publish all sub-packages first (Crucial Step!)
+          # We loop over directories in ./npm and publish them
+          for package in npm/*; do
+            if [ -d "$package" ]; then
+              echo "Publishing $package..."
+              cd $package
+              npm publish --access public --provenance
+              cd ../..
+            fi
+          done
+
+          # 2. Publish the root package
+          echo "Publishing root package..."
+          npm publish --access public --provenance
+
+      - name: Publish to Crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          # Only publish if token exists
+          if [ -n "$CARGO_REGISTRY_TOKEN" ]; then
+             echo "Publishing to Crates.io..."
+             cargo publish
+          else
+             echo "Skipping Crates.io publish (CARGO_REGISTRY_TOKEN not found)"
+          fi

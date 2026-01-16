@@ -1,10 +1,15 @@
 {
     "name": "cinnamon-rs",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "main": "index.js",
     "types": "index.d.ts",
     "napi": {
-        "name": "cinnamon"
+        "binaryName": "cinnamon",
+        "targets": [
+        "aarch64-apple-darwin",
+        "x86_64-pc-windows-msvc",
+        "x86_64-unknown-linux-gnu"
+        ]
     },
     "scripts": {
         "build": "napi build --platform --release",
