@@ -135,19 +135,49 @@ jobs:
         run: |
           npm config set //registry.npmjs.org/:_authToken=$NPM_TOKEN
           
+          # Helper function to check if package exists
+          # Returns "true" if version exists, "false" if not
+          function version_exists() {
+            local name=$1
+            local version=$2
+            # npm view returns the version string if found, or empty/error if not
+            if [ "$(npm view "${name}@${version}" version 2>/dev/null)" == "$version" ]; then
+              echo "true"
+            else
+              echo "false"
+            fi
+          }
+
           # 1. Publish sub-packages
-          for package in npm/*; do
-            if [ -d "$package" ]; then
-              echo "Publishing $package..."
-              cd $package
-              npm publish --access public --provenance
+          for package_dir in npm/*; do
+            if [ -d "$package_dir" ]; then
+              cd $package_dir
+              
+              # Get name and version from package.json in the subdir
+              PKG_NAME=$(node -p "require('./package.json').name")
+              PKG_VERSION=$(node -p "require('./package.json').version")
+
+              if [ "$(version_exists $PKG_NAME $PKG_VERSION)" == "true" ]; then
+                echo "$PKG_NAME@$PKG_VERSION already exists on NPM. Skipping."
+              else
+                echo "Publishing $PKG_NAME@$PKG_VERSION..."
+                npm publish --access public --provenance
+              fi
+              
               cd ../..
             fi
           done
 
           # 2. Publish root package
-          echo "Publishing root package..."
-          npm publish --access public --provenance
+          ROOT_NAME=$(node -p "require('./package.json').name")
+          ROOT_VERSION=$(node -p "require('./package.json').version")
+          
+          if [ "$(version_exists $ROOT_NAME $ROOT_VERSION)" == "true" ]; then
+             echo "$ROOT_NAME@$ROOT_VERSION already exists on NPM. Skipping."
+          else
+             echo "Publishing root package $ROOT_NAME@$ROOT_VERSION..."
+             npm publish --access public --provenance
+          fi
 
       - name: Publish to Crates.io
         env:
@@ -155,7 +185,7 @@ jobs:
         run: |
           if [ -n "$CARGO_REGISTRY_TOKEN" ]; then
              echo "Publishing to Crates.io..."
-             cargo publish
+             cargo publish --allow-dirty
           else
              echo "Skipping Crates.io (Token not found)"
           fi
