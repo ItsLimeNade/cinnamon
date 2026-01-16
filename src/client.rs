@@ -9,6 +9,7 @@ use crate::models::devicestatus::DeviceStatusService;
 use crate::models::entries::EntriesService;
 use crate::models::profile::ProfileService;
 use crate::models::properties::PropertiesService;
+use crate::models::status::StatusService;
 use crate::models::treatments::TreatmentsService;
 
 #[derive(Clone)]
@@ -70,6 +71,12 @@ impl NightscoutClient {
 
     pub fn profiles(&self) -> ProfileService {
         ProfileService {
+            client: self.clone(),
+        }
+    }
+
+    pub fn status(&self) -> StatusService {
+        StatusService {
             client: self.clone(),
         }
     }
