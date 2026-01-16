@@ -14,7 +14,7 @@ on:
     branches:
       - main
     tags:
-      - 'v*' # Triggers on tags like v0.1.0 (ensure your tag matches this pattern!)
+      - '[0-9]+.*'
   pull_request:
 
 jobs:
@@ -25,7 +25,7 @@ jobs:
       fail-fast: false
       matrix:
         settings:
-          # MacOS (Apple Silicon) - Matches your package.json
+          # MacOS (Apple Silicon)
           - host: macos-latest
             target: aarch64-apple-darwin
             build: |
@@ -37,7 +37,7 @@ jobs:
             target: x86_64-pc-windows-msvc
             build: npm run build -- --target x86_64-pc-windows-msvc
 
-          # Linux (x64 GNU) - Uses Docker to cross-compile
+          # Linux (x64 GNU) - Uses Docker
           - host: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian
@@ -98,7 +98,6 @@ jobs:
     name: Publish to NPM & Crates.io
     runs-on: ubuntu-latest
     needs: build
-    # Only run on release tags (e.g. v0.1.0)
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v4
@@ -132,8 +131,7 @@ jobs:
         run: |
           npm config set //registry.npmjs.org/:_authToken=$NPM_TOKEN
           
-          # 1. Publish all sub-packages first (Crucial Step!)
-          # We loop over directories in ./npm and publish them
+          # 1. Publish sub-packages
           for package in npm/*; do
             if [ -d "$package" ]; then
               echo "Publishing $package..."
@@ -143,7 +141,7 @@ jobs:
             fi
           done
 
-          # 2. Publish the root package
+          # 2. Publish root package
           echo "Publishing root package..."
           npm publish --access public --provenance
 
@@ -151,10 +149,9 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          # Only publish if token exists
           if [ -n "$CARGO_REGISTRY_TOKEN" ]; then
              echo "Publishing to Crates.io..."
              cargo publish
           else
-             echo "Skipping Crates.io publish (CARGO_REGISTRY_TOKEN not found)"
+             echo "Skipping Crates.io (Token not found)"
           fi

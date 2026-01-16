@@ -1,7 +1,7 @@
 [package]
 name = "cinnamon"
 version = "0.1.2"
-edition = "2024"
+edition = "2021"
 repository = "https://github.com/ItsLimeNade/cinnamon"
 authors = ["Limenade"]
 description = "A type-safe Nightscout client for Rust, aiming to simplify the interactions with the confusing Nightscout API."
