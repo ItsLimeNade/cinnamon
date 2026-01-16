@@ -109,7 +109,7 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Install Rust (for cargo publish)
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
@@ -121,6 +121,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+
+      - name: Create npm dirs
+        run: npx napi create-npm-dirs
 
       - name: Move artifacts to npm folders
         run: npm run artifacts
