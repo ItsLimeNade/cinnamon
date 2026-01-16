@@ -40,12 +40,13 @@ pub struct ProfileSet {
     pub store: HashMap<String, ProfileConfig>,
 
     #[serde(rename = "mills")]
-    pub mills: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mills: Option<i64>,
 
-    pub units: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub units: Option<String>,
 
     #[napi(js_name = "createdAt")]
-    #[serde(rename = "created_at")]
     pub created_at: String,
 }
 
@@ -53,17 +54,16 @@ pub struct ProfileSet {
 #[napi(object)]
 pub struct ProfileConfig {
     pub dia: f64,
-    #[serde(rename = "carbs_hr")]
-    pub carbs_hr: f64,
-    pub delay: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub carbs_hr: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delay: Option<f64>,
     pub timezone: String,
     pub units: String,
     pub carbratio: Vec<TimeSchedule>,
     pub sens: Vec<TimeSchedule>,
     pub basal: Vec<TimeSchedule>,
-    #[serde(rename = "target_low")]
     pub target_low: Vec<TimeSchedule>,
-    #[serde(rename = "target_high")]
     pub target_high: Vec<TimeSchedule>,
 }
 
