@@ -11,6 +11,11 @@
         "x86_64-unknown-linux-gnu"
         ]
     },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/ItsLimeNade/cinnamon.git"
+    },
+    "license": "MIT",
     "scripts": {
         "build": "napi build --platform --release",
         "artifacts": "napi artifacts -d ./artifacts"
