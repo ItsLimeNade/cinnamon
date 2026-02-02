@@ -1,8 +1,16 @@
-# cinnamon
+<p align="center">
+  <img src="assets/cinnamonlogo.png" alt="Cinnamon Logo" width="220">
+</p>
 
+<h1 align="center">Cinnamon</h1>
+
+<p align="center">
 A type-safe, asynchronous Rust client for the Nightscout API (v1 & v2).
+</p>
 
+<p align="center">
 Cinnamon aims to simplify interactions with Nightscout by providing strongly-typed structs for entries, treatments, profiles, and device status, handling authentication and error propagation automatically.
+</p>
 
 ## Installation
 
@@ -10,7 +18,7 @@ Add this to your Cargo.toml:
 
 ```toml
 [dependencies]
-cinnamon = "0.1.0"
+cinnamon = "0.1.3"
 tokio = { version = "1", features = ["full"] }
 chrono = "0.4"
 
