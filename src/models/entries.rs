@@ -78,8 +78,7 @@ impl SgvService {
         let url = self
             .client
             .base_url
-            .join(Endpoint::Entries.as_path())
-            .expect("URL Error");
+            .join(Endpoint::Entries.as_path())?;
 
         let mut request = self.client.http.post(url);
 
