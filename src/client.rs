@@ -103,20 +103,4 @@ impl NightscoutClient {
             Err(NightscoutError::ApiError { status, message })
         }
     }
-
-    // pub async fn iob(&self) -> Result<IobData, NightscoutError> {
-    //     let url = self
-    //         .base_url
-    //         .join(Endpoint::Iob.as_path())
-    //         .expect("Error building the URL");
-
-    //     let mut request = self.http.get(url);
-
-    //     request = self.auth(request);
-
-    //     let res = self.send_checked(request).await?;
-    //     let wrapper = res.json::<IobWrapper>().await?;
-
-    //     Ok(wrapper.iob)
-    // }
 }
