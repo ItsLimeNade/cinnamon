@@ -63,14 +63,7 @@ impl SgvService {
     /// Fetches the latest available SGV entry.
     pub async fn latest(&self) -> Result<SgvEntry, NightscoutError> {
         let url = self.client.base_url.join(Endpoint::Current.as_path())?;
-
-        let mut request = self.client.http.get(url);
-
-        request = self.client.auth(request);
-
-        let res = self.client.send_checked(request).await?;
-
-        let resp = res.json::<Vec<SgvEntry>>().await?;
+        let resp = self.client.fetch::<Vec<SgvEntry>>(url).await?;
         resp.first().cloned().ok_or(NightscoutError::NotFound)
     }
 

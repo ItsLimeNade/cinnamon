@@ -299,13 +299,7 @@ impl PropertiesRequest {
                 .append_pair("time", &time.to_rfc3339());
         }
 
-        let mut request = self.client.http.get(url);
-        request = self.client.auth(request);
-
-        let response = self.client.send_checked(request).await?;
-
-        let data = response.json::<Properties>().await?;
-
+        let data = self.client.fetch::<Properties>(url).await?;
         Ok(data)
     }
 }

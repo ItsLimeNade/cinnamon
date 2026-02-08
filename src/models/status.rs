@@ -11,13 +11,7 @@ pub struct StatusService {
 impl StatusService {
     pub async fn get(&self) -> Result<Status, NightscoutError> {
         let url = self.client.base_url.join(Endpoint::Status.as_path())?;
-
-        let mut request = self.client.http.get(url);
-        request = self.client.auth(request);
-
-        let response = self.client.send_checked(request).await?;
-
-        Ok(response.json::<Status>().await?)
+        Ok(self.client.fetch::<Status>(url).await?)
     }
 }
 

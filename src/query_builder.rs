@@ -112,11 +112,7 @@ where
 
             match self.method {
                 Method::GET => {
-                    let mut request = self.client.http.get(url);
-                    request = self.client.auth(request);
-
-                    let response = self.client.send_checked(request).await?;
-                    let items = response.json::<Vec<T>>().await?;
+                    let items: Vec<T> = self.client.fetch(url).await?;
 
                     match &self.device {
                         Device::All => Ok(items),
@@ -147,15 +143,7 @@ where
                 }
                 Method::DELETE => {
                     if self.id.is_some() {
-                        // Single ID delete logic
-                        let mut get_req = self.client.http.get(url.clone());
-                        get_req = self.client.auth(get_req);
-                        let item = self
-                            .client
-                            .send_checked(get_req)
-                            .await?
-                            .json::<Vec<T>>()
-                            .await?;
+                        let item: Vec<T> = self.client.fetch(url.clone()).await?;
 
                         let mut del_req = self.client.http.delete(url);
                         del_req = self.client.auth(del_req);
@@ -163,11 +151,7 @@ where
 
                         Ok(item)
                     } else {
-                        let mut get_request = self.client.http.get(url.clone());
-                        get_request = self.client.auth(get_request);
-
-                        let get_response = self.client.send_checked(get_request).await?;
-                        let items: Vec<serde_json::Value> = get_response.json().await?;
+                        let items: Vec<serde_json::Value> = self.client.fetch(url.clone()).await?;
 
                         let delete_urls: Vec<reqwest::Url> = items
                             .iter()

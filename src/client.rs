@@ -103,4 +103,11 @@ impl NightscoutClient {
             Err(NightscoutError::ApiError { status, message })
         }
     }
+
+    pub async fn fetch<T: serde::de::DeserializeOwned>(&self, url: Url) -> Result<T, NightscoutError> {
+        let req = self.auth(self.http.get(url));
+        let res  = self.send_checked(req).await?;
+        let data = res.json::<T>().await?;
+        Ok(data)
+    }
 }

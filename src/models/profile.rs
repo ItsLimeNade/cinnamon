@@ -11,13 +11,7 @@ pub struct ProfileService {
 impl ProfileService {
     pub async fn get(&self) -> Result<Vec<ProfileSet>, NightscoutError> {
         let url = self.client.base_url.join(Endpoint::Profile.as_path())?;
-
-        let mut request = self.client.http.get(url);
-        request = self.client.auth(request);
-
-        let response = self.client.send_checked(request).await?;
-
-        Ok(response.json::<Vec<ProfileSet>>().await?)
+        Ok(self.client.fetch::<Vec<ProfileSet>>(url).await?)
     }
 }
 
