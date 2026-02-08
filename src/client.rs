@@ -21,20 +21,25 @@ pub struct NightscoutClient {
 }
 
 impl NightscoutClient {
-    pub fn new(base_url: &str, api_secret: Option<String>) -> Result<Self, NightscoutError> {
-        let hash = api_secret.clone().map(|secret| {
-            let mut hasher = Sha1::new();
-            hasher.update(secret.as_bytes());
-            let result = hasher.finalize();
-            format!("{:x}", result)
-        });
-
+    pub fn new(base_url: &str) -> Result<Self, NightscoutError> {
         Ok(Self {
             base_url: Url::parse(base_url)?,
             http: HttpClient::new(),
-            api_secret,
-            api_secret_hash: hash,
+            api_secret: None,
+            api_secret_hash: None,
         })
+    }
+
+    pub fn with_secret(mut self, api_secret: impl Into<String>) -> Self {
+        let secret = api_secret.into();
+        
+        let mut hasher = Sha1::new();
+        hasher.update(secret.as_bytes());
+        let hash = format!("{:x}", hasher.finalize());
+
+        self.api_secret = Some(secret);
+        self.api_secret_hash = Some(hash);
+        self
     }
 
     pub fn auth(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
