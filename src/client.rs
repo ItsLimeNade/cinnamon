@@ -6,7 +6,7 @@ use sha1::{Digest, Sha1};
 use url::Url;
 
 use crate::models::devicestatus::DeviceStatusService;
-use crate::models::entries::EntriesService;
+use crate::models::entries::{MbgService, SgvService};
 use crate::models::profile::ProfileService;
 use crate::models::properties::PropertiesService;
 use crate::models::status::StatusService;
@@ -51,8 +51,14 @@ impl NightscoutClient {
         }
     }
 
-    pub fn entries(&self) -> EntriesService {
-        EntriesService {
+    pub fn sgv(&self) -> SgvService {
+        SgvService {
+            client: self.clone(),
+        }
+    }
+
+    pub fn mbg(&self) -> MbgService {
+        MbgService {
             client: self.clone(),
         }
     }

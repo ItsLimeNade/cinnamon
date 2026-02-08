@@ -8,30 +8,12 @@ use chrono::{DateTime, Utc};
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 
-pub struct EntriesService {
-    pub client: NightscoutClient,
-}
-
 pub struct SgvService {
     pub client: NightscoutClient,
 }
 
 pub struct MbgService {
     pub client: NightscoutClient,
-}
-
-impl EntriesService {
-    pub fn sgv(&self) -> SgvService {
-        SgvService {
-            client: self.client.clone(),
-        }
-    }
-
-    pub fn mbg(&self) -> MbgService {
-        MbgService {
-            client: self.client.clone(),
-        }
-    }
 }
 
 impl SgvService {
