@@ -3,7 +3,6 @@ use crate::endpoints::Endpoint;
 use crate::error::NightscoutError;
 use crate::query_builder::{HasDevice, QueryBuilder};
 
-use napi_derive::napi;
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -40,7 +39,6 @@ impl DeviceStatusService {
     }
 }
 
-#[napi(object)]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DeviceStatus {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
@@ -49,7 +47,6 @@ pub struct DeviceStatus {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub device: Option<String>,
 
-    #[napi(js_name = "createdAt")]
     #[serde(rename = "created_at")]
     pub created_at: String,
 

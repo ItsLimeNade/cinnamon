@@ -1,8 +1,6 @@
-use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-#[napi(string_enum)]
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum Trend {
     DoubleUp,

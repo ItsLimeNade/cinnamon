@@ -1,7 +1,6 @@
 use crate::client::NightscoutClient;
 use crate::endpoints::Endpoint;
 use crate::error::NightscoutError;
-use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -23,17 +22,14 @@ impl ProfileService {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[napi(object)]
 
 pub struct ProfileSet {
     #[serde(rename = "_id")]
     pub id: String,
 
-    #[napi(js_name = "defaultProfile")]
     #[serde(rename = "defaultProfile")]
     pub default_profile_name: String,
 
-    #[napi(js_name = "startDate")]
     #[serde(rename = "startDate")]
     pub start_date: String,
 
@@ -46,12 +42,10 @@ pub struct ProfileSet {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub units: Option<String>,
 
-    #[napi(js_name = "createdAt")]
     pub created_at: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[napi(object)]
 pub struct ProfileConfig {
     pub dia: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -68,7 +62,6 @@ pub struct ProfileConfig {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[napi(object)]
 pub struct TimeSchedule {
     pub time: String,
     pub value: f64,
