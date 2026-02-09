@@ -1,7 +1,6 @@
 use crate::client::NightscoutClient;
 use crate::endpoints::Endpoint;
 use crate::error::NightscoutError;
-use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -10,30 +9,37 @@ pub struct ProfileService {
 }
 
 impl ProfileService {
+    /// Retrieves the Nightscout profile data.
+    ///
+    /// This is a "Direct Fetch" method. It does not use a query builder; calling this
+    /// method immediately initiates the HTTP request.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use cinnamon::client::NightscoutClient;
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = NightscoutClient::new("https://ns.example.com")?;
+    /// let status = client.profiles().get().await?;
+    /// println!("Nightscout Name: {}", status.default_profile_name);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get(&self) -> Result<Vec<ProfileSet>, NightscoutError> {
         let url = self.client.base_url.join(Endpoint::Profile.as_path())?;
-
-        let mut request = self.client.http.get(url);
-        request = self.client.auth(request);
-
-        let response = self.client.send_checked(request).await?;
-
-        Ok(response.json::<Vec<ProfileSet>>().await?)
+        self.client.fetch::<Vec<ProfileSet>>(url).await
     }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[napi(object)]
 
 pub struct ProfileSet {
     #[serde(rename = "_id")]
     pub id: String,
 
-    #[napi(js_name = "defaultProfile")]
     #[serde(rename = "defaultProfile")]
     pub default_profile_name: String,
 
-    #[napi(js_name = "startDate")]
     #[serde(rename = "startDate")]
     pub start_date: String,
 
@@ -46,12 +52,10 @@ pub struct ProfileSet {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub units: Option<String>,
 
-    #[napi(js_name = "createdAt")]
     pub created_at: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[napi(object)]
 pub struct ProfileConfig {
     pub dia: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -68,7 +72,6 @@ pub struct ProfileConfig {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[napi(object)]
 pub struct TimeSchedule {
     pub time: String,
     pub value: f64,

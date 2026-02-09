@@ -5,7 +5,6 @@ use crate::client::NightscoutClient;
 use crate::endpoints::Endpoint;
 use crate::error::NightscoutError;
 use crate::query_builder::{HasDevice, QueryBuilder};
-use napi_derive::napi;
 
 #[derive(Debug, Deserialize)]
 pub struct IobWrapper {
@@ -23,24 +22,20 @@ pub struct IobData {
 
 /// Treatment
 /// Represents a care event (bolus, carb correction, temp basal, etc.)
-#[napi(object)]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Treatment {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
 
-    #[napi(js_name = "eventType")]
     #[serde(rename = "eventType")]
     pub event_type: String,
 
-    #[napi(js_name = "createdAt")]
     #[serde(rename = "created_at")]
     pub created_at: String,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub glucose: Option<f64>,
 
-    #[napi(js_name = "glucoseType")]
     #[serde(rename = "glucoseType", skip_serializing_if = "Option::is_none")]
     pub glucose_type: Option<String>,
 
@@ -56,7 +51,6 @@ pub struct Treatment {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub notes: Option<String>,
 
-    #[napi(js_name = "enteredBy")]
     #[serde(rename = "enteredBy", skip_serializing_if = "Option::is_none")]
     pub entered_by: Option<String>,
 }
@@ -72,17 +66,37 @@ pub struct TreatmentsService {
 }
 
 impl TreatmentsService {
-    /// Returns a query builder to list treatments
-    pub fn list(&self) -> QueryBuilder<Treatment> {
+    /// Initiates a query for Treatments entries.
+    ///
+    /// This returns a `QueryBuilder`. You can chain methods like `.limit()`, `.from()`, and `.to()`
+    /// before calling `.send()` to execute the request.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use cinnamon::client::NightscoutClient;
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = NightscoutClient::new("https://ns.example.com")?;
+    /// let entries = client.treatments()
+    ///     .get()
+    ///     .limit(10)
+    ///     .send()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn get(&self) -> QueryBuilder<Treatment> {
         QueryBuilder::<Treatment>::new(self.client.clone(), Endpoint::Treatments, Method::GET)
     }
 
-    /// Returns a query builder to delete treatments
+    /// Initiates a delete request for Treatments entries.
+    ///
+    /// Use the builder to specify which entries to delete (e.g. by ID or date range).
     pub fn delete(&self) -> QueryBuilder<Treatment> {
         QueryBuilder::<Treatment>::new(self.client.clone(), Endpoint::Treatments, Method::DELETE)
     }
 
-    /// Creates new treatments
+    /// Uploads new Treatments entries to Nightscout.
     pub async fn create(
         &self,
         treatments: Vec<Treatment>,

@@ -7,8 +7,8 @@ use std::error::Error;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let url = env::var("NS_URL").expect("NS_URL not set");
-    let token = env::var("NS_TOKEN").ok(); // Token IS required for writing
-    let client = NightscoutClient::new(&url, token)?;
+    let token = env::var("NS_TOKEN").expect("NS_TOKEN not set"); // Token IS required for writing
+    let client = NightscoutClient::new(&url)?.with_secret(token);
 
     let snack = Treatment {
         id: None,

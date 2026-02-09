@@ -5,13 +5,8 @@ use crate::models::trends::Trend;
 use crate::query_builder::{HasDevice, QueryBuilder};
 
 use chrono::{DateTime, Utc};
-use napi_derive::napi;
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
-
-pub struct EntriesService {
-    pub client: NightscoutClient,
-}
 
 pub struct SgvService {
     pub client: NightscoutClient,
@@ -21,66 +16,50 @@ pub struct MbgService {
     pub client: NightscoutClient,
 }
 
-impl EntriesService {
-    pub fn sgv(&self) -> SgvService {
-        SgvService {
-            client: self.client.clone(),
-        }
-    }
-
-    pub fn mbg(&self) -> MbgService {
-        MbgService {
-            client: self.client.clone(),
-        }
-    }
-}
-
 impl SgvService {
-    /// Returns a query builder used to create your request
+    /// Initiates a query for SGV entries.
     ///
-    /// # Examples
+    /// This returns a `QueryBuilder`. You can chain methods like `.limit()`, `.from()`, and `.to()`
+    /// before calling `.send()` to execute the request.
     ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use cinnamon::client::NightscoutClient;
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = NightscoutClient::new("https://ns.example.com")?;
+    /// let entries = client.sgv()
+    ///     .get()
+    ///     .limit(10)
+    ///     .send()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
     /// ```
-    /// use cinnamon::client::NightscoutClient;
-    ///
-    /// let URL = "https://www.example_url.com/";
-    /// let SECRET = "SecretPasss";
-    ///
-    /// let client = NightscoutClient::new(URL, SECRET);
-    /// let entries: Vec<SgvEntry> = client.entries().sgv()
-    ///                 .list()
-    ///                 .from(Utc::now() - Duration::hours(24))
-    ///                 .to(Utc::now() - Duration::hours(20))
-    ///                 .limit(10)
-    ///                 .await?;
-    pub fn list(&self) -> QueryBuilder<SgvEntry> {
+    pub fn get(&self) -> QueryBuilder<SgvEntry> {
         QueryBuilder::<SgvEntry>::new(self.client.clone(), Endpoint::Sgv, Method::GET)
     }
 
+    /// Initiates a delete request for SGV entries.
+    ///
+    /// Use the builder to specify which entries to delete (e.g. by ID or date range).
     pub fn delete(&self) -> QueryBuilder<SgvEntry> {
         QueryBuilder::<SgvEntry>::new(self.client.clone(), Endpoint::Sgv, Method::DELETE)
     }
 
-    /// Fetches the latest available SGV entry.
+    /// Fetches the single latest available SGV entry.
+    ///
+    /// This is a convenience wrapper around `.get().limit(1)`.
     pub async fn latest(&self) -> Result<SgvEntry, NightscoutError> {
-        let url = self.client.base_url.join(Endpoint::Current.as_path())?;
+        let builder = self.get().limit(1);
+        let result = builder.send().await?;
 
-        let mut request = self.client.http.get(url);
-
-        request = self.client.auth(request);
-
-        let res = self.client.send_checked(request).await?;
-
-        let resp = res.json::<Vec<SgvEntry>>().await?;
-        resp.first().cloned().ok_or(NightscoutError::NotFound)
+        result.first().cloned().ok_or(NightscoutError::NotFound)
     }
 
+    /// Uploads new SGV entries to Nightscout.
     pub async fn create(&self, entries: Vec<SgvEntry>) -> Result<Vec<SgvEntry>, NightscoutError> {
-        let url = self
-            .client
-            .base_url
-            .join(Endpoint::Entries.as_path())
-            .expect("URL Error");
+        let url = self.client.base_url.join(Endpoint::Entries.as_path())?;
 
         let mut request = self.client.http.post(url);
 
@@ -93,21 +72,47 @@ impl SgvService {
 }
 
 impl MbgService {
-    pub fn list(&self) -> QueryBuilder<MbgEntry> {
+    /// Initiates a query for MBG entries.
+    ///
+    /// This returns a `QueryBuilder`. You can chain methods like `.limit()`, `.from()`, and `.to()`
+    /// before calling `.send()` to execute the request.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use cinnamon::client::NightscoutClient;
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = NightscoutClient::new("https://ns.example.com")?;
+    /// let entries = client.mbg()
+    ///     .get()
+    ///     .limit(10)
+    ///     .send()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn get(&self) -> QueryBuilder<MbgEntry> {
         QueryBuilder::<MbgEntry>::new(self.client.clone(), Endpoint::Mbg, Method::GET)
     }
 
+    /// Initiates a delete request for MBG entries.
+    ///
+    /// Use the builder to specify which entries to delete (e.g. by ID or date range).
     pub fn delete(&self) -> QueryBuilder<MbgEntry> {
         QueryBuilder::<MbgEntry>::new(self.client.clone(), Endpoint::Mbg, Method::DELETE)
     }
 
+    /// Fetches the single latest available MBG entry.
+    ///
+    /// This is a convenience wrapper around `.get().limit(1)`.
     pub async fn latest(&self) -> Result<MbgEntry, NightscoutError> {
-        let builder = self.list().limit(1);
-        let result = builder.await?;
+        let builder = self.get().limit(1);
+        let result = builder.send().await?;
 
         result.first().cloned().ok_or(NightscoutError::NotFound)
     }
 
+    /// Uploads new MBG entries to Nightscout.
     pub async fn create(&self, entries: Vec<MbgEntry>) -> Result<Vec<MbgEntry>, NightscoutError> {
         let url = self.client.base_url.join(Endpoint::Entries.as_path())?;
 
@@ -124,14 +129,12 @@ impl MbgService {
 ///
 /// This struct represents blood glucose values automatically entered by a CGM (continuous glucose monitor)
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[napi(object)]
 pub struct SgvEntry {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     pub sgv: i32,
     pub date: i64,
     #[serde(rename = "dateString")]
-    #[napi(js_name = "dateString")]
     pub date_string: String,
     pub direction: Trend,
     #[serde(rename = "type")]
@@ -171,14 +174,12 @@ impl HasDevice for SgvEntry {
 ///
 /// https://en.wikipedia.org/wiki/Fingerstick
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[napi(object)]
 pub struct MbgEntry {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     pub mbg: i32,
     pub date: i64,
     #[serde(rename = "dateString")]
-    #[napi(js_name = "dateString")]
     pub date_string: String,
     #[serde(rename = "type")]
     pub type_: String,

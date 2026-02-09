@@ -3,7 +3,6 @@ use crate::endpoints::Endpoint;
 use crate::error::NightscoutError;
 use crate::models::treatments::Treatment;
 use chrono::{DateTime, Utc};
-use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -67,7 +66,6 @@ impl fmt::Display for PropertyType {
 
 /// The main response object for /api/v2/properties
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[napi(object)]
 pub struct Properties {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bgnow: Option<BgNow>,
@@ -105,7 +103,6 @@ pub struct Properties {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[napi(object)]
 pub struct BgNow {
     pub mean: f64,
     pub last: f64,
@@ -114,14 +111,11 @@ pub struct BgNow {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[napi(object)]
 pub struct Delta {
     pub absolute: f64,
-    #[napi(js_name = "elapsedMins")]
     #[serde(rename = "elapsedMins")]
     pub elapsed_mins: f64,
     pub interpolated: bool,
-    #[napi(js_name = "mean5MinsAgo")]
     #[serde(rename = "mean5MinsAgo")]
     pub mean_5_mins_ago: f64,
     pub mgdl: f64,
@@ -130,16 +124,13 @@ pub struct Delta {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[napi(object)]
 pub struct Bucket {
     pub mean: f64,
     pub last: f64,
     pub mills: i64,
     pub index: i32,
     #[serde(rename = "fromMills")]
-    #[napi(js_name = "fromMills")]
     pub from_mills: i64,
-    #[napi(js_name = "toMills")]
     #[serde(rename = "toMills")]
     pub to_mills: i64,
     pub sgvs: Vec<PropertySgv>,
@@ -147,7 +138,6 @@ pub struct Bucket {
 
 /// A simplified SGV used inside properties (slightly different from main Entries)
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[napi(object)]
 pub struct PropertySgv {
     #[serde(rename = "_id")]
     pub id: String,
@@ -161,7 +151,6 @@ pub struct PropertySgv {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[napi(object)]
 pub struct Direction {
     pub display: Option<String>,
     pub value: String,
@@ -170,7 +159,6 @@ pub struct Direction {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[napi(object)]
 pub struct Upbat {
     pub display: String,
     // devices is sometimes a Map, sometimes empty. Value is safest.
@@ -178,65 +166,52 @@ pub struct Upbat {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[napi(object)]
 pub struct IobProperty {
     pub iob: f64,
     pub activity: f64,
     pub source: String,
     pub display: String,
-    #[napi(js_name = "displayLine")]
     #[serde(rename = "displayLine")]
     pub display_line: String,
-    #[napi(js_name = "lastBolus")]
     #[serde(rename = "lastBolus", skip_serializing_if = "Option::is_none")]
     pub last_bolus: Option<Treatment>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[napi(object)]
 pub struct Cob {
     pub cob: f64,
-    #[napi(js_name = "isDecaying")]
     #[serde(rename = "isDecaying")]
     pub is_decaying: i32,
-    #[napi(js_name = "decayedBy")]
     #[serde(rename = "decayedBy")]
     pub decayed_by: String,
     pub source: String,
     pub display: Value,
-    #[napi(js_name = "displayLine")]
     #[serde(rename = "displayLine")]
     pub display_line: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[napi(object)]
 pub struct Basal {
     pub display: String,
     pub current: Option<BasalCurrent>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[napi(object)]
 pub struct BasalCurrent {
     pub basal: f64,
-    #[napi(js_name = "tempbasal")]
     #[serde(rename = "tempbasal")]
     pub temp_basal: Option<f64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[napi(object)]
 pub struct DbSize {
     pub display: String,
     pub status: String,
-    #[napi(js_name = "totalDataSize")]
     #[serde(rename = "totalDataSize")]
     pub total_data_size: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[napi(object)]
 pub struct RuntimeState {
     pub state: String,
 }
@@ -246,37 +221,33 @@ pub struct PropertiesService {
 }
 
 impl PropertiesService {
+    /// Begins building a request for Nightscout system properties.
+    ///
+    /// System properties include Insulin on Board (IOB), Carbs on Board (COB), Pump Status, etc.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use cinnamon::client::NightscoutClient;
+    /// # use cinnamon::models::properties::PropertyType;
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = NightscoutClient::new("https://ns.example.com")?;
+    ///
+    /// // Fetch only IOB and COB
+    /// let props = client.properties()
+    ///     .get()
+    ///     .only(&[PropertyType::Iob, PropertyType::Cob])
+    ///     .send()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn get(&self) -> PropertiesRequest {
         PropertiesRequest::new(self.client.clone())
     }
 }
 
-/// Represents a snapshot of the Nightscout system state and properties.
-///
-/// This struct acts as a strongly-typed container for the JSON response returned by the
-/// `/api/v2/properties` endpoint. It aggregates data from various Nightscout plugins
-/// (like IOB, COB, Pump status, etc.) into a single object.
-///
-/// # Usage
-/// You typically obtain this struct by calling `.send()` on a `PropertiesRequest`:
-///
-/// ```rust
-/// let properties = client.properties()
-///     .get()
-///     .only(&[PropertyType::Iob, PropertyType::Cob])
-///     .send()
-///     .await?;
-///
-/// if let Some(iob) = properties.iob {
-///     println!("Current IOB: {} U", iob.iob);
-/// }
-/// ```
-///
-///
-/// # Forward Compatibility
-/// Any properties returned by Nightscout that are not explicitly defined in this struct
-/// (e.g., custom or future plugins) are captured in the `unknown` field, ensuring
-/// no data is lost during deserialization.
+/// A builder for constructing a properties request.
 pub struct PropertiesRequest {
     client: NightscoutClient,
     requested_properties: Vec<PropertyType>,
@@ -292,16 +263,47 @@ impl PropertiesRequest {
         }
     }
 
+    /// Specifies which properties to retrieve.
+    ///
+    /// By default, Nightscout returns all available system properties. Using this method
+    /// allows you to filter the response to specific fields (e.g., IOB, COB), which reduces
+    /// payload size and processing time.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use cinnamon::client::NightscoutClient;
+    /// # use cinnamon::models::properties::PropertyType;
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = NightscoutClient::new("https://ns.example.com")?;
+    ///
+    /// let properties = client.properties()
+    ///     .get()
+    ///     // Request only Insulin on Board and Carbs on Board
+    ///     .only(&[PropertyType::Iob, PropertyType::Cob])
+    ///     .send()
+    ///     .await?;
+    ///
+    /// if let Some(iob) = properties.iob {
+    ///     println!("IOB: {}", iob.iob);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn only(mut self, properties: &[PropertyType]) -> Self {
         self.requested_properties.extend_from_slice(properties);
         self
     }
 
+    /// Requests the system state as it was at a specific time.
+    ///
+    /// If omitted, the current system state is returned.
     pub fn at(mut self, time: DateTime<Utc>) -> Self {
         self.at_time = Some(time);
         self
     }
 
+    /// Executes the request.
     pub async fn send(self) -> Result<Properties, NightscoutError> {
         let base_path = Endpoint::Properties.as_path();
 
@@ -324,13 +326,7 @@ impl PropertiesRequest {
                 .append_pair("time", &time.to_rfc3339());
         }
 
-        let mut request = self.client.http.get(url);
-        request = self.client.auth(request);
-
-        let response = self.client.send_checked(request).await?;
-
-        let data = response.json::<Properties>().await?;
-
+        let data = self.client.fetch::<Properties>(url).await?;
         Ok(data)
     }
 }
