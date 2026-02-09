@@ -1,11 +1,8 @@
 use crate::error::NightscoutError;
-
 use super::client::NightscoutClient;
 use crate::endpoints::Endpoint;
 
-use std::future::{Future, IntoFuture};
 use std::marker::PhantomData;
-use std::pin::Pin;
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -77,15 +74,11 @@ impl<T> QueryBuilder<T> {
     }
 }
 
-impl<T> IntoFuture for QueryBuilder<T>
+impl<T> QueryBuilder<T>
 where
     T: DeserializeOwned + Send + Sync + 'static + HasDevice,
 {
-    type Output = Result<Vec<T>, NightscoutError>;
-    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send>>;
-
-    fn into_future(self) -> Self::IntoFuture {
-        Box::pin(async move {
+    pub async fn send(self) -> Result<Vec<T>, NightscoutError> {
             // For Device::Auto, it is needed to do a pre-flight to determine which device to use.
             // While it has performance impact, it's a good tradeoff if you do not know the device
             // names on the server and only want data from one device.
@@ -192,6 +185,6 @@ where
                 }
                 _ => Err(NightscoutError::Unknown),
             }
-        })
+        }
     }
-}
+

@@ -29,12 +29,13 @@ impl SgvService {
     ///
     /// let client = NightscoutClient::new(URL, SECRET);
     /// let entries: Vec<SgvEntry> = client.entries().sgv()
-    ///                 .list()
+    ///                 .get()
     ///                 .from(Utc::now() - Duration::hours(24))
     ///                 .to(Utc::now() - Duration::hours(20))
     ///                 .limit(10)
+    ///                 .send()
     ///                 .await?;
-    pub fn list(&self) -> QueryBuilder<SgvEntry> {
+    pub fn get(&self) -> QueryBuilder<SgvEntry> {
         QueryBuilder::<SgvEntry>::new(self.client.clone(), Endpoint::Sgv, Method::GET)
     }
 
@@ -44,9 +45,10 @@ impl SgvService {
 
     /// Fetches the latest available SGV entry.
     pub async fn latest(&self) -> Result<SgvEntry, NightscoutError> {
-        let url = self.client.base_url.join(Endpoint::Current.as_path())?;
-        let resp = self.client.fetch::<Vec<SgvEntry>>(url).await?;
-        resp.first().cloned().ok_or(NightscoutError::NotFound)
+        let builder = self.get().limit(1);
+        let result = builder.send().await?;
+
+        result.first().cloned().ok_or(NightscoutError::NotFound)
     }
 
     pub async fn create(&self, entries: Vec<SgvEntry>) -> Result<Vec<SgvEntry>, NightscoutError> {
@@ -66,7 +68,7 @@ impl SgvService {
 }
 
 impl MbgService {
-    pub fn list(&self) -> QueryBuilder<MbgEntry> {
+    pub fn get(&self) -> QueryBuilder<MbgEntry> {
         QueryBuilder::<MbgEntry>::new(self.client.clone(), Endpoint::Mbg, Method::GET)
     }
 
@@ -75,8 +77,8 @@ impl MbgService {
     }
 
     pub async fn latest(&self) -> Result<MbgEntry, NightscoutError> {
-        let builder = self.list().limit(1);
-        let result = builder.await?;
+        let builder = self.get().limit(1);
+        let result = builder.send().await?;
 
         result.first().cloned().ok_or(NightscoutError::NotFound)
     }

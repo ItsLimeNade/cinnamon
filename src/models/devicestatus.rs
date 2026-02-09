@@ -12,7 +12,7 @@ pub struct DeviceStatusService {
 }
 
 impl DeviceStatusService {
-    pub fn list(&self) -> QueryBuilder<DeviceStatus> {
+    pub fn get(&self) -> QueryBuilder<DeviceStatus> {
         QueryBuilder::<DeviceStatus>::new(self.client.clone(), Endpoint::DeviceStatus, Method::GET)
     }
 
