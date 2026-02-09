@@ -4,7 +4,6 @@ use crate::endpoints::Endpoint;
 
 use std::marker::PhantomData;
 
-use anyhow::Result;
 use chrono::{DateTime, Utc};
 use futures::stream::{self, StreamExt};
 use reqwest::Method;

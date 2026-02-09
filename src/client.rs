@@ -1,6 +1,5 @@
 use super::error::NightscoutError;
 
-use anyhow::Result;
 use reqwest::{Client as HttpClient, Response};
 use sha1::{Digest, Sha1};
 use url::Url;
