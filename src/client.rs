@@ -12,34 +12,54 @@ use crate::models::properties::PropertiesService;
 use crate::models::status::StatusService;
 use crate::models::treatments::TreatmentsService;
 
+use std::ops::Deref;
+use std::sync::Arc;
+
 #[derive(Clone)]
 pub struct NightscoutClient {
+    pub inner: Arc<NightscoutClientInner>,
+}
+
+#[derive(Clone)]
+pub struct NightscoutClientInner {
     pub base_url: Url,
-    pub api_secret: Option<String>,
     pub http: HttpClient,
     pub api_secret_hash: Option<String>,
 }
 
+impl Deref for NightscoutClient {
+    type Target = NightscoutClientInner;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
 impl NightscoutClient {
     pub fn new(base_url: &str) -> Result<Self, NightscoutError> {
-        Ok(Self {
-            base_url: Url::parse(base_url)?,
+        let inner = NightscoutClientInner {
+            base_url:Url::parse(base_url)?,
             http: HttpClient::new(),
-            api_secret: None,
-            api_secret_hash: None,
-        })
+            api_secret_hash: None, 
+        };
+        let client = Self { inner: Arc::new(inner) };
+        Ok(client)
     }
 
-    pub fn with_secret(mut self, api_secret: impl Into<String>) -> Self {
+    pub fn with_secret(self, api_secret: impl Into<String>) -> Self {
         let secret = api_secret.into();
         
         let mut hasher = Sha1::new();
         hasher.update(secret.as_bytes());
         let hash = format!("{:x}", hasher.finalize());
 
-        self.api_secret = Some(secret);
-        self.api_secret_hash = Some(hash);
-        self
+        let inner = NightscoutClientInner {
+            base_url: self.base_url.clone(),
+            http: self.http.clone(),
+            api_secret_hash: Some(hash), 
+        };
+        let client = Self { inner: Arc::new(inner) };
+        client
     }
 
     pub fn auth(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
