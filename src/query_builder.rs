@@ -86,6 +86,37 @@ where
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
+            // For Device::Auto, it is needed to do a pre-flight to determine which device to use.
+            // While it has performance impact, it's a good tradeoff if you do not know the device
+            // names on the server and only want data from one device.
+            let resolved_device_name: Option<String> = match &self.device {
+                Device::Custom(name) => Some(name.clone()),
+                Device::Auto => {
+                    let mut probe_url = self.client.base_url.join(self.endpoint.as_path())?;
+                    {
+                        let mut query = probe_url.query_pairs_mut();
+                        query.append_pair("count", "1"); 
+                        
+                        // We still need to access the data at the interval which the user wants us to get data
+                        // if we didn't the device name could be (and probably will be) total wrong.
+                        if let Some(from) = self.from_date {
+                            query.append_pair("find[dateString][$gte]", &from.to_rfc3339());
+                        }
+                        if let Some(to) = self.to_date {
+                            query.append_pair("find[dateString][$lte]", &to.to_rfc3339());
+                        }
+                    }
+                    let probe_result: Result<Vec<T>, _> = self.client.fetch(probe_url).await;
+
+                    match probe_result {
+                        Ok(items) => items.first().and_then(|item| item.device()).map(|s| s.to_string()),
+                        Err(_) => None,
+                    }
+                },
+                Device::All => None,
+            };
+
+
             let path = if let Some(id) = &self.id {
                 format!("{}/{}", self.endpoint.as_path(), id)
             } else {
@@ -107,39 +138,17 @@ where
                     if let Some(to) = self.to_date {
                         query.append_pair("find[dateString][$lte]", &to.to_rfc3339());
                     }
+
+                    if let Some(name) = &resolved_device_name {
+                        query.append_pair("find[device]", name);
+                    }
                 }
             }
 
             match self.method {
                 Method::GET => {
                     let items: Vec<T> = self.client.fetch(url).await?;
-
-                    match &self.device {
-                        Device::All => Ok(items),
-                        Device::Custom(name) => {
-                            let filtered: Vec<T> = items
-                                .into_iter()
-                                .filter(|item| item.device() == Some(name.as_str()))
-                                .collect();
-                            Ok(filtered)
-                        }
-                        Device::Auto => {
-                            let target_device = items
-                                .iter()
-                                .find_map(|item| item.device())
-                                .map(|s| s.to_string());
-
-                            if let Some(device_name) = target_device {
-                                let filtered: Vec<T> = items
-                                    .into_iter()
-                                    .filter(|item| item.device() == Some(device_name.as_str()))
-                                    .collect();
-                                Ok(filtered)
-                            } else {
-                                Ok(items)
-                            }
-                        }
-                    }
+                    Ok(items)
                 }
                 Method::DELETE => {
                     if self.id.is_some() {
