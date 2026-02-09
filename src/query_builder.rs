@@ -35,6 +35,7 @@ pub struct QueryBuilder<T> {
     method: Method,
     id: Option<String>,
     device: Device,
+    date_field: String,
     _marker: PhantomData<T>,
 }
 
@@ -49,6 +50,7 @@ impl<T> QueryBuilder<T> {
             method,
             id: None,
             device: Device::All,
+            date_field: "dateString".to_string(),
             _marker: PhantomData,
         }
     }
@@ -77,6 +79,15 @@ impl<T> QueryBuilder<T> {
     /// When used with `DELETE`, this deletes a single item.
     pub fn id(mut self, id: impl Into<String>) -> Self {
         self.id = Some(id.into());
+        self
+    }
+
+    /// Some nightscout entries use different date filter names
+    ///
+    /// This function allows to override the default dateString date field query
+    /// param name.
+    pub(crate) fn with_date_field(mut self, field: impl Into<String>) -> Self {
+        self.date_field = field.into();
         self
     }
 
@@ -109,10 +120,13 @@ where
                     // We still need to access the data at the interval which the user wants us to get data
                     // if we didn't the device name could be (and probably will be) total wrong.
                     if let Some(from) = self.from_date {
-                        query.append_pair("find[dateString][$gte]", &from.to_rfc3339());
+                        let key = format!("find[{}][$gte]", self.date_field);
+                        query.append_pair(&key, &from.to_rfc3339());
                     }
+
                     if let Some(to) = self.to_date {
-                        query.append_pair("find[dateString][$lte]", &to.to_rfc3339());
+                        let key = format!("find[{}][$lte]", self.date_field);
+                        query.append_pair(&key, &to.to_rfc3339());
                     }
                 }
                 let probe_result: Result<Vec<T>, _> = self.client.fetch(probe_url).await;
@@ -143,11 +157,13 @@ where
                 query.append_pair("count", &self.count.to_string());
 
                 if let Some(from) = self.from_date {
-                    query.append_pair("find[dateString][$gte]", &from.to_rfc3339());
+                    let key = format!("find[{}][$gte]", self.date_field);
+                    query.append_pair(&key, &from.to_rfc3339());
                 }
 
                 if let Some(to) = self.to_date {
-                    query.append_pair("find[dateString][$lte]", &to.to_rfc3339());
+                    let key = format!("find[{}][$lte]", self.date_field);
+                    query.append_pair(&key, &to.to_rfc3339());
                 }
 
                 if let Some(name) = &resolved_device_name {

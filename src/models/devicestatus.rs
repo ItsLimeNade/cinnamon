@@ -33,6 +33,7 @@ impl DeviceStatusService {
     /// ```
     pub fn get(&self) -> QueryBuilder<DeviceStatus> {
         QueryBuilder::<DeviceStatus>::new(self.client.clone(), Endpoint::DeviceStatus, Method::GET)
+            .with_date_field("created_at")
     }
 
     /// Initiates a delete request for Device Status entries.
@@ -44,6 +45,7 @@ impl DeviceStatusService {
             Endpoint::DeviceStatus,
             Method::DELETE,
         )
+        .with_date_field("created_at")
     }
 
     /// Uploads new Device Status entries to Nightscout.

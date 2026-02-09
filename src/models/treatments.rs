@@ -87,6 +87,7 @@ impl TreatmentsService {
     /// ```
     pub fn get(&self) -> QueryBuilder<Treatment> {
         QueryBuilder::<Treatment>::new(self.client.clone(), Endpoint::Treatments, Method::GET)
+            .with_date_field("created_at")
     }
 
     /// Initiates a delete request for Treatments entries.
@@ -94,6 +95,7 @@ impl TreatmentsService {
     /// Use the builder to specify which entries to delete (e.g. by ID or date range).
     pub fn delete(&self) -> QueryBuilder<Treatment> {
         QueryBuilder::<Treatment>::new(self.client.clone(), Endpoint::Treatments, Method::DELETE)
+            .with_date_field("created_at")
     }
 
     /// Uploads new Treatments entries to Nightscout.
