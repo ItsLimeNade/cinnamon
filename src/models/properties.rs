@@ -221,37 +221,33 @@ pub struct PropertiesService {
 }
 
 impl PropertiesService {
+    /// Begins building a request for Nightscout system properties.
+    ///
+    /// System properties include Insulin on Board (IOB), Carbs on Board (COB), Pump Status, etc.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use cinnamon::client::NightscoutClient;
+    /// # use cinnamon::models::properties::PropertyType;
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = NightscoutClient::new("https://ns.example.com")?;
+    ///
+    /// // Fetch only IOB and COB
+    /// let props = client.properties()
+    ///     .get()
+    ///     .only(&[PropertyType::Iob, PropertyType::Cob])
+    ///     .send()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn get(&self) -> PropertiesRequest {
         PropertiesRequest::new(self.client.clone())
     }
 }
 
-/// Represents a snapshot of the Nightscout system state and properties.
-///
-/// This struct acts as a strongly-typed container for the JSON response returned by the
-/// `/api/v2/properties` endpoint. It aggregates data from various Nightscout plugins
-/// (like IOB, COB, Pump status, etc.) into a single object.
-///
-/// # Usage
-/// You typically obtain this struct by calling `.send()` on a `PropertiesRequest`:
-///
-/// ```rust
-/// let properties = client.properties()
-///     .get()
-///     .only(&[PropertyType::Iob, PropertyType::Cob])
-///     .send()
-///     .await?;
-///
-/// if let Some(iob) = properties.iob {
-///     println!("Current IOB: {} U", iob.iob);
-/// }
-/// ```
-///
-///
-/// # Forward Compatibility
-/// Any properties returned by Nightscout that are not explicitly defined in this struct
-/// (e.g., custom or future plugins) are captured in the `unknown` field, ensuring
-/// no data is lost during deserialization.
+/// A builder for constructing a properties request.
 pub struct PropertiesRequest {
     client: NightscoutClient,
     requested_properties: Vec<PropertyType>,
@@ -267,16 +263,47 @@ impl PropertiesRequest {
         }
     }
 
+/// Specifies which properties to retrieve.
+    ///
+    /// By default, Nightscout returns all available system properties. Using this method
+    /// allows you to filter the response to specific fields (e.g., IOB, COB), which reduces
+    /// payload size and processing time.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use cinnamon::client::NightscoutClient;
+    /// # use cinnamon::models::properties::PropertyType;
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = NightscoutClient::new("https://ns.example.com")?;
+    ///
+    /// let properties = client.properties()
+    ///     .get()
+    ///     // Request only Insulin on Board and Carbs on Board
+    ///     .only(&[PropertyType::Iob, PropertyType::Cob])
+    ///     .send()
+    ///     .await?;
+    ///
+    /// if let Some(iob) = properties.iob {
+    ///     println!("IOB: {}", iob.iob);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn only(mut self, properties: &[PropertyType]) -> Self {
         self.requested_properties.extend_from_slice(properties);
         self
     }
 
+    /// Requests the system state as it was at a specific time.
+    ///
+    /// If omitted, the current system state is returned.
     pub fn at(mut self, time: DateTime<Utc>) -> Self {
         self.at_time = Some(time);
         self
     }
 
+    /// Executes the request.
     pub async fn send(self) -> Result<Properties, NightscoutError> {
         let base_path = Endpoint::Properties.as_path();
 

@@ -17,33 +17,39 @@ pub struct MbgService {
 }
 
 impl SgvService {
-    /// Returns a query builder used to create your request
+    /// Initiates a query for SGV entries.
     ///
-    /// # Examples
+    /// This returns a `QueryBuilder`. You can chain methods like `.limit()`, `.from()`, and `.to()`
+    /// before calling `.send()` to execute the request.
     ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use cinnamon::client::NightscoutClient;
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = NightscoutClient::new("https://ns.example.com")?;
+    /// let entries = client.sgv()
+    ///     .get()
+    ///     .limit(10)
+    ///     .send()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
     /// ```
-    /// use cinnamon::client::NightscoutClient;
-    ///
-    /// let URL = "https://www.example_url.com/";
-    /// let SECRET = "SecretPasss";
-    ///
-    /// let client = NightscoutClient::new(URL, SECRET);
-    /// let entries: Vec<SgvEntry> = client.entries().sgv()
-    ///                 .get()
-    ///                 .from(Utc::now() - Duration::hours(24))
-    ///                 .to(Utc::now() - Duration::hours(20))
-    ///                 .limit(10)
-    ///                 .send()
-    ///                 .await?;
     pub fn get(&self) -> QueryBuilder<SgvEntry> {
         QueryBuilder::<SgvEntry>::new(self.client.clone(), Endpoint::Sgv, Method::GET)
     }
 
+    /// Initiates a delete request for SGV entries.
+    ///
+    /// Use the builder to specify which entries to delete (e.g. by ID or date range).
     pub fn delete(&self) -> QueryBuilder<SgvEntry> {
         QueryBuilder::<SgvEntry>::new(self.client.clone(), Endpoint::Sgv, Method::DELETE)
     }
 
-    /// Fetches the latest available SGV entry.
+    /// Fetches the single latest available SGV entry.
+    ///
+    /// This is a convenience wrapper around `.get().limit(1)`.
     pub async fn latest(&self) -> Result<SgvEntry, NightscoutError> {
         let builder = self.get().limit(1);
         let result = builder.send().await?;
@@ -51,6 +57,7 @@ impl SgvService {
         result.first().cloned().ok_or(NightscoutError::NotFound)
     }
 
+    /// Uploads new SGV entries to Nightscout.
     pub async fn create(&self, entries: Vec<SgvEntry>) -> Result<Vec<SgvEntry>, NightscoutError> {
         let url = self
             .client
@@ -68,14 +75,39 @@ impl SgvService {
 }
 
 impl MbgService {
+    /// Initiates a query for MBG entries.
+    ///
+    /// This returns a `QueryBuilder`. You can chain methods like `.limit()`, `.from()`, and `.to()`
+    /// before calling `.send()` to execute the request.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use cinnamon::client::NightscoutClient;
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = NightscoutClient::new("https://ns.example.com")?;
+    /// let entries = client.mbg()
+    ///     .get()
+    ///     .limit(10)
+    ///     .send()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn get(&self) -> QueryBuilder<MbgEntry> {
         QueryBuilder::<MbgEntry>::new(self.client.clone(), Endpoint::Mbg, Method::GET)
     }
 
+    /// Initiates a delete request for MBG entries.
+    ///
+    /// Use the builder to specify which entries to delete (e.g. by ID or date range).
     pub fn delete(&self) -> QueryBuilder<MbgEntry> {
         QueryBuilder::<MbgEntry>::new(self.client.clone(), Endpoint::Mbg, Method::DELETE)
     }
-
+    
+    /// Fetches the single latest available MBG entry.
+    ///
+    /// This is a convenience wrapper around `.get().limit(1)`.
     pub async fn latest(&self) -> Result<MbgEntry, NightscoutError> {
         let builder = self.get().limit(1);
         let result = builder.send().await?;
@@ -83,6 +115,7 @@ impl MbgService {
         result.first().cloned().ok_or(NightscoutError::NotFound)
     }
 
+    /// Uploads new MBG entries to Nightscout.
     pub async fn create(&self, entries: Vec<MbgEntry>) -> Result<Vec<MbgEntry>, NightscoutError> {
         let url = self.client.base_url.join(Endpoint::Entries.as_path())?;
 

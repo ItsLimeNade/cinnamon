@@ -9,6 +9,22 @@ pub struct StatusService {
 }
 
 impl StatusService {
+    /// Retrieves the Nightscout server status, version, and settings.
+    ///
+    /// This is a "Direct Fetch" method. It does not use a query builder; calling this
+    /// method immediately initiates the HTTP request.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use cinnamon::client::NightscoutClient;
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = NightscoutClient::new("[https://ns.example.com](https://ns.example.com)")?;
+    /// let status = client.status().get().await?;
+    /// println!("Nightscout Version: {}", status.version);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get(&self) -> Result<Status, NightscoutError> {
         let url = self.client.base_url.join(Endpoint::Status.as_path())?;
         Ok(self.client.fetch::<Status>(url).await?)

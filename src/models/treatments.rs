@@ -66,17 +66,37 @@ pub struct TreatmentsService {
 }
 
 impl TreatmentsService {
-    /// Returns a query builder to list treatments
-    pub fn list(&self) -> QueryBuilder<Treatment> {
+    /// Initiates a query for Treatments entries.
+    ///
+    /// This returns a `QueryBuilder`. You can chain methods like `.limit()`, `.from()`, and `.to()`
+    /// before calling `.send()` to execute the request.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use cinnamon::client::NightscoutClient;
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = NightscoutClient::new("https://ns.example.com")?;
+    /// let entries = client.teatments()
+    ///     .get()
+    ///     .limit(10)
+    ///     .send()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn get(&self) -> QueryBuilder<Treatment> {
         QueryBuilder::<Treatment>::new(self.client.clone(), Endpoint::Treatments, Method::GET)
     }
 
-    /// Returns a query builder to delete treatments
+    /// Initiates a delete request for Treatments entries.
+    ///
+    /// Use the builder to specify which entries to delete (e.g. by ID or date range).
     pub fn delete(&self) -> QueryBuilder<Treatment> {
         QueryBuilder::<Treatment>::new(self.client.clone(), Endpoint::Treatments, Method::DELETE)
     }
 
-    /// Creates new treatments
+    /// Uploads new Treatments entries to Nightscout.
     pub async fn create(
         &self,
         treatments: Vec<Treatment>,

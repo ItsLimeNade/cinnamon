@@ -6,7 +6,7 @@ use std::error::Error;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let url = env::var("NS_URL").expect("NS_URL not set");
-    let client = NightscoutClient::new(&url, None)?;
+    let client = NightscoutClient::new(&url)?;
 
     // Request specific properties (faster than fetching everything)
     let stats = client

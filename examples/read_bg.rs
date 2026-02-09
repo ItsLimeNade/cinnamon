@@ -6,13 +6,19 @@ use std::error::Error;
 async fn main() -> Result<(), Box<dyn Error>> {
     // Initialize (Read-only doesn't strictly need a token, but good practice)
     let url = env::var("NS_URL").expect("NS_URL not set");
-    let token = env::var("NS_TOKEN").ok();
-    let client = NightscoutClient::new(&url, token)?;
+    let token = env::var("NS_TOKEN").expect("NS_TOKEN not set");
+    let client = NightscoutClient::new(&url)?
+    .with_secret(token);
 
     println!("Fetching latest glucose data.");
 
     // Fetch last 5 SGV entries
-    let entries = client.entries().sgv().list().limit(5).await?;
+    let entries = client
+        .sgv()
+        .get()
+        .limit(5)
+        .send()
+        .await?;
 
     for entry in entries {
         println!(

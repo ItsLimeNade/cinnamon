@@ -10,12 +10,18 @@ use reqwest::Method;
 use serde::de::DeserializeOwned;
 
 #[derive(Clone, Debug, PartialEq)]
+/// Specifies target device filtering behavior.
 pub enum Device {
+    /// Automatically attempts to determine the primary device name from recent data.
+    /// Performs an extra HTTP request (pre-flight) to find the device name.
     Auto,
+    /// Fetches data from all devices.
     All,
+    /// Fetches data only from a specific device name (e.g., "bubble").
     Custom(String),
 }
 
+/// Trait for models that contain a device name field.
 pub trait HasDevice {
     fn device(&self) -> Option<&str>;
 }
@@ -47,26 +53,34 @@ impl<T> QueryBuilder<T> {
         }
     }
 
+    /// Filters results to entries occurring on or after this date.
     pub fn from(mut self, date: DateTime<Utc>) -> Self {
         self.from_date = Some(date);
         self
     }
 
+    /// Filters results to entries occurring on or before this date.
     pub fn to(mut self, date: DateTime<Utc>) -> Self {
         self.to_date = Some(date);
         self
     }
 
+    /// Limits the number of results returned. Default is 10.
     pub fn limit(mut self, count: usize) -> Self {
         self.count = count;
         self
     }
 
+    /// targets a specific resource ID.
+    ///
+    /// When used with `GET`, this fetches a single item.
+    /// When used with `DELETE`, this deletes a single item.
     pub fn id(mut self, id: impl Into<String>) -> Self {
         self.id = Some(id.into());
         self
     }
 
+    /// Filters results by device name.
     pub fn device(mut self, device: Device) -> Self {
         self.device = device;
         self
@@ -76,7 +90,10 @@ impl<T> QueryBuilder<T> {
 impl<T> QueryBuilder<T>
 where
     T: DeserializeOwned + Send + Sync + 'static + HasDevice,
-{
+{   
+    /// Executes the built query.
+    ///
+    /// This method sends the HTTP request to Nightscout constructed by the builder methods.
     pub async fn send(self) -> Result<Vec<T>, NightscoutError> {
             // For Device::Auto, it is needed to do a pre-flight to determine which device to use.
             // While it has performance impact, it's a good tradeoff if you do not know the device
