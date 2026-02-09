@@ -27,7 +27,7 @@
 //!     .with_secret("my_secret");
 //!
 //!     // Pattern 1: Query Builder (needs .send())
-//!     let entries = client.entries().sgv().get()
+//!     let entries = client.sgv().get()
 //!         .limit(5)
 //!         .send()
 //!         .await?;

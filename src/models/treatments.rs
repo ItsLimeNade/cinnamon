@@ -77,7 +77,7 @@ impl TreatmentsService {
     /// # use cinnamon::client::NightscoutClient;
     /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = NightscoutClient::new("https://ns.example.com")?;
-    /// let entries = client.teatments()
+    /// let entries = client.treatments()
     ///     .get()
     ///     .limit(10)
     ///     .send()

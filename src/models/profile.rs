@@ -16,12 +16,12 @@ impl ProfileService {
     ///
     /// # Example
     ///
-    /// ```rust,no_run
+    /// ```no_run
     /// # use cinnamon::client::NightscoutClient;
     /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client = NightscoutClient::new("[https://ns.example.com](https://ns.example.com)")?;
+    /// let client = NightscoutClient::new("https://ns.example.com")?;
     /// let status = client.profiles().get().await?;
-    /// println!("Nightscout Version: {}", status.version);
+    /// println!("Nightscout Name: {}", status.default_profile_name);
     /// # Ok(())
     /// # }
     /// ```
