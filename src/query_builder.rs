@@ -1,6 +1,6 @@
-use crate::error::NightscoutError;
 use super::client::NightscoutClient;
 use crate::endpoints::Endpoint;
+use crate::error::NightscoutError;
 
 use std::marker::PhantomData;
 
@@ -90,117 +90,117 @@ impl<T> QueryBuilder<T> {
 impl<T> QueryBuilder<T>
 where
     T: DeserializeOwned + Send + Sync + 'static + HasDevice,
-{   
+{
     /// Executes the built query.
     ///
     /// This method sends the HTTP request to Nightscout constructed by the builder methods.
     pub async fn send(self) -> Result<Vec<T>, NightscoutError> {
-            // For Device::Auto, it is needed to do a pre-flight to determine which device to use.
-            // While it has performance impact, it's a good tradeoff if you do not know the device
-            // names on the server and only want data from one device.
-            let resolved_device_name: Option<String> = match &self.device {
-                Device::Custom(name) => Some(name.clone()),
-                Device::Auto => {
-                    let mut probe_url = self.client.base_url.join(self.endpoint.as_path())?;
-                    {
-                        let mut query = probe_url.query_pairs_mut();
-                        query.append_pair("count", "1"); 
-                        
-                        // We still need to access the data at the interval which the user wants us to get data
-                        // if we didn't the device name could be (and probably will be) total wrong.
-                        if let Some(from) = self.from_date {
-                            query.append_pair("find[dateString][$gte]", &from.to_rfc3339());
-                        }
-                        if let Some(to) = self.to_date {
-                            query.append_pair("find[dateString][$lte]", &to.to_rfc3339());
-                        }
-                    }
-                    let probe_result: Result<Vec<T>, _> = self.client.fetch(probe_url).await;
+        // For Device::Auto, it is needed to do a pre-flight to determine which device to use.
+        // While it has performance impact, it's a good tradeoff if you do not know the device
+        // names on the server and only want data from one device.
+        let resolved_device_name: Option<String> = match &self.device {
+            Device::Custom(name) => Some(name.clone()),
+            Device::Auto => {
+                let mut probe_url = self.client.base_url.join(self.endpoint.as_path())?;
+                {
+                    let mut query = probe_url.query_pairs_mut();
+                    query.append_pair("count", "1");
 
-                    match probe_result {
-                        Ok(items) => items.first().and_then(|item| item.device()).map(|s| s.to_string()),
-                        Err(_) => None,
-                    }
-                },
-                Device::All => None,
-            };
-
-
-            let path = if let Some(id) = &self.id {
-                format!("{}/{}", self.endpoint.as_path(), id)
-            } else {
-                self.endpoint.as_path().to_string()
-            };
-
-            let mut url = self.client.base_url.join(&path)?;
-
-            {
-                let mut query = url.query_pairs_mut();
-
-                if self.id.is_none() {
-                    query.append_pair("count", &self.count.to_string());
-
+                    // We still need to access the data at the interval which the user wants us to get data
+                    // if we didn't the device name could be (and probably will be) total wrong.
                     if let Some(from) = self.from_date {
                         query.append_pair("find[dateString][$gte]", &from.to_rfc3339());
                     }
-
                     if let Some(to) = self.to_date {
                         query.append_pair("find[dateString][$lte]", &to.to_rfc3339());
                     }
+                }
+                let probe_result: Result<Vec<T>, _> = self.client.fetch(probe_url).await;
 
-                    if let Some(name) = &resolved_device_name {
-                        query.append_pair("find[device]", name);
-                    }
+                match probe_result {
+                    Ok(items) => items
+                        .first()
+                        .and_then(|item| item.device())
+                        .map(|s| s.to_string()),
+                    Err(_) => None,
                 }
             }
+            Device::All => None,
+        };
 
-            match self.method {
-                Method::GET => {
-                    let items: Vec<T> = self.client.fetch(url).await?;
-                    Ok(items)
+        let path = if let Some(id) = &self.id {
+            format!("{}/{}", self.endpoint.as_path(), id)
+        } else {
+            self.endpoint.as_path().to_string()
+        };
+
+        let mut url = self.client.base_url.join(&path)?;
+
+        {
+            let mut query = url.query_pairs_mut();
+
+            if self.id.is_none() {
+                query.append_pair("count", &self.count.to_string());
+
+                if let Some(from) = self.from_date {
+                    query.append_pair("find[dateString][$gte]", &from.to_rfc3339());
                 }
-                Method::DELETE => {
-                    if self.id.is_some() {
-                        let item: Vec<T> = self.client.fetch(url.clone()).await?;
 
-                        let mut del_req = self.client.http.delete(url);
-                        del_req = self.client.auth(del_req);
-                        self.client.send_checked(del_req).await?;
-
-                        Ok(item)
-                    } else {
-                        let items: Vec<serde_json::Value> = self.client.fetch(url.clone()).await?;
-
-                        let delete_urls: Vec<reqwest::Url> = items
-                            .iter()
-                            .filter_map(|item| {
-                                let id = item.get("_id")?.as_str()?;
-                                let delete_path = format!("{}/{}", self.endpoint.as_path(), id);
-                                self.client.base_url.join(&delete_path).ok()
-                            })
-                            .collect();
-
-                        let delete_tasks = delete_urls.into_iter().map(|url| {
-                            let client = self.client.clone();
-                            async move {
-                                let mut req = client.http.delete(url);
-                                req = client.auth(req);
-                                client.send_checked(req).await
-                            }
-                        });
-
-                        stream::iter(delete_tasks)
-                            .buffer_unordered(10)
-                            .collect::<Vec<_>>()
-                            .await;
-
-                        let t_items: Vec<T> =
-                            serde_json::from_value(serde_json::Value::Array(items))?;
-                        Ok(t_items)
-                    }
+                if let Some(to) = self.to_date {
+                    query.append_pair("find[dateString][$lte]", &to.to_rfc3339());
                 }
-                _ => Err(NightscoutError::Unknown),
+
+                if let Some(name) = &resolved_device_name {
+                    query.append_pair("find[device]", name);
+                }
             }
         }
-    }
 
+        match self.method {
+            Method::GET => {
+                let items: Vec<T> = self.client.fetch(url).await?;
+                Ok(items)
+            }
+            Method::DELETE => {
+                if self.id.is_some() {
+                    let item: Vec<T> = self.client.fetch(url.clone()).await?;
+
+                    let mut del_req = self.client.http.delete(url);
+                    del_req = self.client.auth(del_req);
+                    self.client.send_checked(del_req).await?;
+
+                    Ok(item)
+                } else {
+                    let items: Vec<serde_json::Value> = self.client.fetch(url.clone()).await?;
+
+                    let delete_urls: Vec<reqwest::Url> = items
+                        .iter()
+                        .filter_map(|item| {
+                            let id = item.get("_id")?.as_str()?;
+                            let delete_path = format!("{}/{}", self.endpoint.as_path(), id);
+                            self.client.base_url.join(&delete_path).ok()
+                        })
+                        .collect();
+
+                    let delete_tasks = delete_urls.into_iter().map(|url| {
+                        let client = self.client.clone();
+                        async move {
+                            let mut req = client.http.delete(url);
+                            req = client.auth(req);
+                            client.send_checked(req).await
+                        }
+                    });
+
+                    stream::iter(delete_tasks)
+                        .buffer_unordered(10)
+                        .collect::<Vec<_>>()
+                        .await;
+
+                    let t_items: Vec<T> = serde_json::from_value(serde_json::Value::Array(items))?;
+                    Ok(t_items)
+                }
+            }
+            _ => Err(NightscoutError::Unknown),
+        }
+    }
+}

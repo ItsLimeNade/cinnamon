@@ -27,7 +27,7 @@ impl StatusService {
     /// ```
     pub async fn get(&self) -> Result<Status, NightscoutError> {
         let url = self.client.base_url.join(Endpoint::Status.as_path())?;
-        Ok(self.client.fetch::<Status>(url).await?)
+        self.client.fetch::<Status>(url).await
     }
 }
 

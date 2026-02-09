@@ -59,10 +59,7 @@ impl SgvService {
 
     /// Uploads new SGV entries to Nightscout.
     pub async fn create(&self, entries: Vec<SgvEntry>) -> Result<Vec<SgvEntry>, NightscoutError> {
-        let url = self
-            .client
-            .base_url
-            .join(Endpoint::Entries.as_path())?;
+        let url = self.client.base_url.join(Endpoint::Entries.as_path())?;
 
         let mut request = self.client.http.post(url);
 
@@ -104,7 +101,7 @@ impl MbgService {
     pub fn delete(&self) -> QueryBuilder<MbgEntry> {
         QueryBuilder::<MbgEntry>::new(self.client.clone(), Endpoint::Mbg, Method::DELETE)
     }
-    
+
     /// Fetches the single latest available MBG entry.
     ///
     /// This is a convenience wrapper around `.get().limit(1)`.

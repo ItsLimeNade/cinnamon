@@ -52,11 +52,13 @@ impl NightscoutClient {
     /// Returns a `NightscoutError` if the URL is invalid.
     pub fn new(base_url: &str) -> Result<Self, NightscoutError> {
         let inner = NightscoutClientInner {
-            base_url:Url::parse(base_url)?,
+            base_url: Url::parse(base_url)?,
             http: HttpClient::new(),
-            api_secret_hash: None, 
+            api_secret_hash: None,
         };
-        let client = Self { inner: Arc::new(inner) };
+        let client = Self {
+            inner: Arc::new(inner),
+        };
         Ok(client)
     }
 
@@ -73,7 +75,7 @@ impl NightscoutClient {
     /// ```
     pub fn with_secret(self, api_secret: impl Into<String>) -> Self {
         let secret = api_secret.into();
-        
+
         let mut hasher = Sha1::new();
         hasher.update(secret.as_bytes());
         let hash = format!("{:x}", hasher.finalize());
@@ -81,10 +83,12 @@ impl NightscoutClient {
         let inner = NightscoutClientInner {
             base_url: self.base_url.clone(),
             http: self.http.clone(),
-            api_secret_hash: Some(hash), 
+            api_secret_hash: Some(hash),
         };
-        let client = Self { inner: Arc::new(inner) };
-        client
+
+        Self {
+            inner: Arc::new(inner),
+        }
     }
 
     /// Adds authentication headers to a request if a secret is present.
@@ -173,9 +177,12 @@ impl NightscoutClient {
     }
 
     /// Helper to fetch and deserialize a JSON response from a URL.
-    pub(crate) async fn fetch<T: serde::de::DeserializeOwned>(&self, url: Url) -> Result<T, NightscoutError> {
+    pub(crate) async fn fetch<T: serde::de::DeserializeOwned>(
+        &self,
+        url: Url,
+    ) -> Result<T, NightscoutError> {
         let req = self.auth(self.http.get(url));
-        let res  = self.send_checked(req).await?;
+        let res = self.send_checked(req).await?;
         let data = res.json::<T>().await?;
         Ok(data)
     }

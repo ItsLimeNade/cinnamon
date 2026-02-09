@@ -263,7 +263,7 @@ impl PropertiesRequest {
         }
     }
 
-/// Specifies which properties to retrieve.
+    /// Specifies which properties to retrieve.
     ///
     /// By default, Nightscout returns all available system properties. Using this method
     /// allows you to filter the response to specific fields (e.g., IOB, COB), which reduces
