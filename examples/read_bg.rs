@@ -19,10 +19,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .datetime()
             .map(|dt| dt.to_rfc3339())
             .unwrap_or_else(|| "unknown".to_string());
-        println!(
-            "[{}] {} mg/dl ({:?})",
-            time, entry.sgv, entry.direction
-        );
+        println!("[{}] {} mg/dl ({:?})", time, entry.sgv, entry.direction);
     }
 
     Ok(())

@@ -134,7 +134,11 @@ pub struct SgvEntry {
     pub id: Option<String>,
     pub sgv: i32,
     pub date: i64,
-    #[serde(rename = "dateString", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "dateString",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub date_string: Option<String>,
     pub direction: Trend,
     #[serde(rename = "type")]
@@ -189,7 +193,11 @@ pub struct MbgEntry {
     pub id: Option<String>,
     pub mbg: i32,
     pub date: i64,
-    #[serde(rename = "dateString", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "dateString",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub date_string: Option<String>,
     #[serde(rename = "type")]
     pub type_: String,
