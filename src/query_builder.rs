@@ -36,6 +36,7 @@ pub struct QueryBuilder<T> {
     id: Option<String>,
     device: Device,
     date_field: String,
+    date_is_epoch_millis: bool,
     _marker: PhantomData<T>,
 }
 
@@ -51,6 +52,7 @@ impl<T> QueryBuilder<T> {
             id: None,
             device: Device::All,
             date_field: "dateString".to_string(),
+            date_is_epoch_millis: false,
             _marker: PhantomData,
         }
     }
@@ -85,10 +87,37 @@ impl<T> QueryBuilder<T> {
     /// Some nightscout entries use different date filter names
     ///
     /// This function allows to override the default dateString date field query
-    /// param name.
+    /// param name. The bound is sent as an RFC3339 string, which suits string
+    /// date fields such as `dateString` and `created_at`.
     pub(crate) fn with_date_field(mut self, field: impl Into<String>) -> Self {
         self.date_field = field.into();
+        self.date_is_epoch_millis = false;
         self
+    }
+
+    /// Override the date filter field with a numeric epoch-millis field (the
+    /// entry `date`).
+    ///
+    /// Unlike [`with_date_field`](Self::with_date_field), which sends an RFC3339
+    /// string, this sends epoch milliseconds. Use it for fields stored as a
+    /// number so the range filter matches (SGV/MBG entries uploaded through the
+    /// Nightscout v3 API do not carry `dateString`, but always carry `date`).
+    pub(crate) fn with_epoch_date_field(mut self, field: impl Into<String>) -> Self {
+        self.date_field = field.into();
+        self.date_is_epoch_millis = true;
+        self
+    }
+
+    /// Encode a date-range bound for the active date field.
+    ///
+    /// Numeric fields (see [`with_epoch_date_field`](Self::with_epoch_date_field))
+    /// are encoded as epoch milliseconds; string fields as RFC3339.
+    fn format_bound(&self, date: DateTime<Utc>) -> String {
+        if self.date_is_epoch_millis {
+            date.timestamp_millis().to_string()
+        } else {
+            date.to_rfc3339()
+        }
     }
 
     /// Filters results by device name.
@@ -121,12 +150,12 @@ where
                     // if we didn't the device name could be (and probably will be) total wrong.
                     if let Some(from) = self.from_date {
                         let key = format!("find[{}][$gte]", self.date_field);
-                        query.append_pair(&key, &from.to_rfc3339());
+                        query.append_pair(&key, &self.format_bound(from));
                     }
 
                     if let Some(to) = self.to_date {
                         let key = format!("find[{}][$lte]", self.date_field);
-                        query.append_pair(&key, &to.to_rfc3339());
+                        query.append_pair(&key, &self.format_bound(to));
                     }
                 }
                 let probe_result: Result<Vec<T>, _> = self.client.fetch(probe_url).await;
@@ -158,12 +187,12 @@ where
 
                 if let Some(from) = self.from_date {
                     let key = format!("find[{}][$gte]", self.date_field);
-                    query.append_pair(&key, &from.to_rfc3339());
+                    query.append_pair(&key, &self.format_bound(from));
                 }
 
                 if let Some(to) = self.to_date {
                     let key = format!("find[{}][$lte]", self.date_field);
-                    query.append_pair(&key, &to.to_rfc3339());
+                    query.append_pair(&key, &self.format_bound(to));
                 }
 
                 if let Some(name) = &resolved_device_name {

@@ -38,6 +38,7 @@ impl SgvService {
     /// ```
     pub fn get(&self) -> QueryBuilder<SgvEntry> {
         QueryBuilder::<SgvEntry>::new(self.client.clone(), Endpoint::Sgv, Method::GET)
+            .with_epoch_date_field("date")
     }
 
     /// Initiates a delete request for SGV entries.
@@ -45,6 +46,7 @@ impl SgvService {
     /// Use the builder to specify which entries to delete (e.g. by ID or date range).
     pub fn delete(&self) -> QueryBuilder<SgvEntry> {
         QueryBuilder::<SgvEntry>::new(self.client.clone(), Endpoint::Sgv, Method::DELETE)
+            .with_epoch_date_field("date")
     }
 
     /// Fetches the single latest available SGV entry.
@@ -93,6 +95,7 @@ impl MbgService {
     /// ```
     pub fn get(&self) -> QueryBuilder<MbgEntry> {
         QueryBuilder::<MbgEntry>::new(self.client.clone(), Endpoint::Mbg, Method::GET)
+            .with_epoch_date_field("date")
     }
 
     /// Initiates a delete request for MBG entries.
@@ -100,6 +103,7 @@ impl MbgService {
     /// Use the builder to specify which entries to delete (e.g. by ID or date range).
     pub fn delete(&self) -> QueryBuilder<MbgEntry> {
         QueryBuilder::<MbgEntry>::new(self.client.clone(), Endpoint::Mbg, Method::DELETE)
+            .with_epoch_date_field("date")
     }
 
     /// Fetches the single latest available MBG entry.
