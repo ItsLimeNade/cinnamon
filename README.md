@@ -60,7 +60,9 @@ use cinnamon::models::entries::SgvEntry;
 match client.entries().sgv().latest().await {
     Ok(entry) => {
         println!("Latest BG: {} mg/dl", entry.sgv);
-        println!("Time: {}", entry.date_string);
+        if let Some(dt) = entry.datetime() {
+            println!("Time: {}", dt);
+        }
         println!("Trend: {:?}", entry.direction);
     },
     Err(e) => eprintln!("Error fetching SGV: {}", e),
@@ -69,7 +71,7 @@ match client.entries().sgv().latest().await {
 // Fetch the last 10 entries
 let history = client.entries().sgv().list().limit(10).await?;
 for entry in history {
-    println!("[{}] {}", entry.date_string, entry.sgv);
+    println!("[{}] {}", entry.date, entry.sgv);
 }
 
 ```

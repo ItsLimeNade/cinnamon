@@ -134,8 +134,8 @@ pub struct SgvEntry {
     pub id: Option<String>,
     pub sgv: i32,
     pub date: i64,
-    #[serde(rename = "dateString")]
-    pub date_string: String,
+    #[serde(rename = "dateString", default, skip_serializing_if = "Option::is_none")]
+    pub date_string: Option<String>,
     pub direction: Trend,
     #[serde(rename = "type")]
     pub type_: String,
@@ -149,7 +149,7 @@ impl SgvEntry {
             id: None,
             sgv,
             date: date.timestamp_millis(),
-            date_string: date.to_rfc3339(),
+            date_string: Some(date.to_rfc3339()),
             direction,
             type_: "sgv".to_string(),
             device: Some("cinnamon".to_string()),
@@ -159,6 +159,16 @@ impl SgvEntry {
     pub fn device(mut self, name: String) -> Self {
         self.device = Some(name);
         self
+    }
+
+    /// The entry timestamp as UTC, derived from the always-present `date`
+    /// (epoch milliseconds).
+    ///
+    /// Prefer this over `date_string`, which some uploaders (for example the
+    /// Nightscout v3 API) omit. Returns `None` only if `date` is out of the
+    /// representable range.
+    pub fn datetime(&self) -> Option<DateTime<Utc>> {
+        DateTime::from_timestamp_millis(self.date)
     }
 }
 
@@ -179,8 +189,8 @@ pub struct MbgEntry {
     pub id: Option<String>,
     pub mbg: i32,
     pub date: i64,
-    #[serde(rename = "dateString")]
-    pub date_string: String,
+    #[serde(rename = "dateString", default, skip_serializing_if = "Option::is_none")]
+    pub date_string: Option<String>,
     #[serde(rename = "type")]
     pub type_: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -193,7 +203,7 @@ impl MbgEntry {
             id: None,
             mbg,
             date: date.timestamp_millis(),
-            date_string: date.to_rfc3339(),
+            date_string: Some(date.to_rfc3339()),
             type_: "mbg".to_string(),
             device: Some("cinnamon".to_string()),
         }
@@ -202,6 +212,16 @@ impl MbgEntry {
     pub fn device(mut self, name: String) -> Self {
         self.device = Some(name);
         self
+    }
+
+    /// The entry timestamp as UTC, derived from the always-present `date`
+    /// (epoch milliseconds).
+    ///
+    /// Prefer this over `date_string`, which some uploaders (for example the
+    /// Nightscout v3 API) omit. Returns `None` only if `date` is out of the
+    /// representable range.
+    pub fn datetime(&self) -> Option<DateTime<Utc>> {
+        DateTime::from_timestamp_millis(self.date)
     }
 }
 

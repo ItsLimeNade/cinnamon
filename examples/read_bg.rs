@@ -15,9 +15,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let entries = client.sgv().get().limit(5).send().await?;
 
     for entry in entries {
+        let time = entry
+            .datetime()
+            .map(|dt| dt.to_rfc3339())
+            .unwrap_or_else(|| "unknown".to_string());
         println!(
             "[{}] {} mg/dl ({:?})",
-            entry.date_string, entry.sgv, entry.direction
+            time, entry.sgv, entry.direction
         );
     }
 
