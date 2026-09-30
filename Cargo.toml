@@ -1,32 +1,84 @@
 [package]
 name = "cinnamon"
-version = "1.0.3"
-edition = "2021"
+version = "2.0.0-alpha.1"
+edition = "2024"
+rust-version = "1.85"
 repository = "https://github.com/ItsLimeNade/cinnamon"
 authors = ["Limenade"]
-description = "A type-safe Nightscout client for Rust, aiming to simplify the interactions with the confusing Nightscout API."
+description = "A type-safe, async Nightscout client for Rust: API v3 with v1/v2 fallback, JWT auth, incremental sync and realtime streams."
 homepage = "https://github.com/ItsLimeNade/cinnamon?tab=readme-ov-file#cinnamon"
-readme = "./README.md"
+documentation = "https://docs.rs/cinnamon"
+readme = "README.md"
 license = "MIT"
-keywords = ["diabetes", "nightscout", "api"]
-categories = ["api-bindings", "asynchronous", "data-structures", "science::bioinformatics", "web-programming::http-client"]
+keywords = ["diabetes", "nightscout", "cgm", "api", "client"]
+categories = ["api-bindings", "asynchronous", "web-programming::http-client", "science"]
+exclude = ["/assets", "/tests/e2e", "/.github"]
 
-[lib]
-crate-type = ["rlib"] 
-doctest = false
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+default = ["rustls", "compression", "tracing"]
+## TLS through rustls (the default).
+rustls = ["reqwest/rustls", "tokio-tungstenite?/rustls-tls-webpki-roots"]
+## TLS through the platform's native stack instead of rustls.
+native-tls = ["reqwest/native-tls", "tokio-tungstenite?/native-tls"]
+## Transparent gzip / brotli response decompression.
+compression = ["reqwest/gzip", "reqwest/brotli"]
+## Emit `tracing` spans and events for every request (never includes bodies or secrets).
+tracing = ["dep:tracing"]
+## Live updates over Nightscout's socket.io channels (`/storage`, `/alarm`, `dataUpdate`).
+realtime = ["dep:tokio-tungstenite", "tokio/rt", "tokio/macros", "futures-util/sink"]
+## A synchronous wrapper around the async client (runs its own current-thread runtime).
+blocking = ["tokio/rt", "tokio/net"]
 
 [dependencies]
+reqwest = { version = "0.13", default-features = false, features = ["json", "http2", "system-proxy"] }
+tokio = { version = "1.43", default-features = false, features = ["sync", "time"] }
+bytes = "1.10"
+futures-core = "0.3.31"
+futures-util = { version = "0.3.31", default-features = false, features = ["std"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-tokio = { version = "1.49", features = ["full"] }
+serde_path_to_error = "0.1.20"
+chrono = { version = "0.4.43", default-features = false, features = ["std", "clock", "serde"] }
 url = "2.5.8"
-chrono = "0.4.43"
+percent-encoding = "2.3"
 sha1 = "0.10.6"
+uuid = { version = "1.18", default-features = false, features = ["std", "v5"] }
+secrecy = "0.10.3"
 thiserror = "2.0.18"
-futures = "0.3.31"
+fastrand = "2.3"
+tokio-tungstenite = { version = "0.28", default-features = false, features = ["connect", "handshake"], optional = true }
+tracing = { version = "0.1.41", default-features = false, features = ["std", "attributes"], optional = true }
 
 [dev-dependencies]
 wiremock = "0.6.5"
-tokio = { version = "1.49", features = ["full", "test-util"] }
+tokio = { version = "1.43", features = ["full", "test-util"] }
 serde_json = "1.0.149"
+proptest = "1.7"
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+unreachable_pub = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+multiple_crate_versions = "allow"
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "warn"
+print_stdout = "warn"
+redundant_clone = "warn"
+needless_pass_by_value = "warn"
+
+[[bench]]
+name = "decode"
+harness = false
+
+[[example]]
+name = "realtime_alarms"
+required-features = ["realtime"]

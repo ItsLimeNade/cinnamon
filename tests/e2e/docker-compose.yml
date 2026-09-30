@@ -1,0 +1,32 @@
+# Throwaway Nightscout used by the e2e suite (`cargo test --all-features --test e2e`).
+#
+#   docker compose -f tests/e2e/docker-compose.yml up -d
+#   eval "$(tests/e2e/bootstrap.sh)"
+#   cargo test --all-features --test e2e -- --test-threads=1
+#
+# Never point the e2e suite at a real Nightscout: it creates and deletes data.
+services:
+  mongo:
+    image: mongo:5.0.32
+    tmpfs:
+      - /data/db
+
+  nightscout:
+    image: nightscout/cgm-remote-monitor:${NIGHTSCOUT_TAG:-15.0.8}
+    depends_on:
+      - mongo
+    restart: on-failure
+    ports:
+      - "1337:1337"
+    environment:
+      NODE_ENV: production
+      TZ: Etc/UTC
+      NIGHTSCOUT_HOSTNAME: 0.0.0.0
+      PORT: "1337"
+      INSECURE_USE_HTTP: "true"
+      MONGO_CONNECTION: mongodb://mongo:27017/nightscout
+      API_SECRET: cinnamon-e2e-secret
+      AUTH_DEFAULT_ROLES: denied
+      DISPLAY_UNITS: mg/dl
+      ENABLE: careportal iob cob basal openaps loop pump cage sage iage bage rawbg bwp ar2 cors
+      AUTH_FAIL_DELAY: "50"
