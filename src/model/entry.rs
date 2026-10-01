@@ -109,8 +109,9 @@ impl Sgv {
         self
     }
 
-    fn fill_defaults(&mut self) {
+    fn fill_defaults(&mut self, app: &str) {
         self.kind.get_or_insert_with(|| "sgv".into());
+        self.device.get_or_insert_with(|| app.to_owned());
         self.date_string.get_or_insert_with(|| self.date.to_iso());
     }
 }
@@ -182,8 +183,9 @@ impl Mbg {
         self
     }
 
-    fn fill_defaults(&mut self) {
+    fn fill_defaults(&mut self, app: &str) {
         self.kind.get_or_insert_with(|| "mbg".into());
+        self.device.get_or_insert_with(|| app.to_owned());
         self.date_string.get_or_insert_with(|| self.date.to_iso());
     }
 }
@@ -248,8 +250,9 @@ impl Cal {
         }
     }
 
-    fn fill_defaults(&mut self) {
+    fn fill_defaults(&mut self, app: &str) {
         self.kind.get_or_insert_with(|| "cal".into());
+        self.device.get_or_insert_with(|| app.to_owned());
         self.date_string.get_or_insert_with(|| self.date.to_iso());
     }
 }

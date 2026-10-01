@@ -239,8 +239,9 @@ impl<T: Document> Collection<T> {
         }
     }
 
-    /// Uploads a document. Missing `app`, `utcOffset`, `date`/`created_at` and the API v3
-    /// `identifier` are filled in, so a retried upload deduplicates instead of duplicating.
+    /// Uploads a document. Missing `app`, `device` (the client's app name), `utcOffset`,
+    /// `date`/`created_at` and the API v3 `identifier` are filled in, so a retried upload
+    /// deduplicates instead of duplicating.
     ///
     /// Through API v3, re-uploading an existing document replaces it and needs the
     /// `update` permission in addition to `create`.
@@ -503,12 +504,7 @@ impl<T: Document> Collection<T> {
         let docs = fetch_raw(&self.client, T::COLLECTION, &spec, api).await?;
         Ok(docs
             .iter()
-            .filter_map(|d| {
-                d.get("identifier")
-                    .or_else(|| d.get("_id"))
-                    .and_then(Value::as_str)
-                    .map(str::to_owned)
-            })
+            .filter_map(|d| raw_id(d).map(str::to_owned))
             .collect())
     }
 
@@ -891,8 +887,8 @@ impl<T: Document> List<T> {
         self
     }
 
-    /// Maximum number of documents (default 10). With [`List::stream`], the total across
-    /// pages.
+    /// Maximum number of documents (default 10). Limits above one page (1000) are fetched
+    /// page by page, as with [`List::stream`]; pass `usize::MAX` for no cap.
     pub const fn limit(mut self, limit: usize) -> Self {
         self.spec.limit = limit;
         self
@@ -935,32 +931,24 @@ impl<T: Document> List<T> {
     /// # Errors
     ///
     /// Transport, authorization and response-shape errors.
-    pub async fn send(self) -> Result<Vec<T>> {
+    pub async fn send(mut self) -> Result<Vec<T>> {
+        if self.spec.limit > V3_MAX_LIMIT {
+            // Page by date like `stream`: `skip`-based pages would shift (repeating or
+            // missing documents) whenever data is written during the read.
+            self.spec.page_size = V3_MAX_LIMIT;
+            return self.stream().try_collect().await;
+        }
         let api = self
             .client
             .inner
             .pick_api(support(T::COLLECTION), "listing")
             .await?;
-        let mut remaining = self.spec.limit;
-        let mut spec = self.spec.clone();
-        let mut out = Vec::new();
-        // One request normally; more only when the limit exceeds API v3's page cap.
-        loop {
-            spec.limit = remaining.min(V3_MAX_LIMIT);
-            let page = fetch_raw(&self.client, T::COLLECTION, &spec, api).await?;
-            let got = page.len();
-            out.extend(decode_docs::<T>(page));
-            remaining = remaining.saturating_sub(got);
-            if remaining == 0 || got < spec.limit || api == Api::V1 {
-                break;
-            }
-            spec.skip += got;
-        }
-        Ok(out)
+        let page = fetch_raw(&self.client, T::COLLECTION, &self.spec, api).await?;
+        Ok(decode_docs(page))
     }
 
     /// Runs the query and returns raw JSON documents, optionally projected to `fields`
-    /// (API v3 only; ignored by API v1).
+    /// (API v3 only; ignored by API v1). Returns at most one page (1000 documents).
     ///
     /// # Errors
     ///
@@ -1043,19 +1031,24 @@ impl PagerState {
         let mut spec = self.spec.clone();
         spec.limit = (page_size + self.boundary.len()).min(V3_MAX_LIMIT);
         let raw = fetch_raw(&self.client, T::COLLECTION, &spec, api).await?;
+        // `skip` applies to the first page only; later pages start from the time bound.
+        self.spec.skip = 0;
         let full_page = raw.len() >= spec.limit;
 
-        let mut docs: Vec<T> = decode_docs::<T>(raw)
+        let mut page: Vec<Value> = raw
             .into_iter()
-            .filter(|d| d.id().is_none_or(|id| !self.boundary.contains(id)))
+            .filter(|d| raw_id(d).is_none_or(|id| !self.boundary.contains(id)))
             .collect();
-        docs.truncate(remaining);
+        page.truncate(remaining);
 
         // Advance the time bound to the last timestamp seen, remembering which ids sit on it.
+        // Both come from the raw documents and the field the query sorts on, so documents
+        // that fail to decode still move the bound instead of ending the stream.
+        let time = |d: &Value| query_time(d, T::COLLECTION, api);
         let edge = if self.spec.ascending {
-            docs.iter().filter_map(Document::timestamp).max()
+            page.iter().filter_map(time).max()
         } else {
-            docs.iter().filter_map(Document::timestamp).min()
+            page.iter().filter_map(time).min()
         };
         match edge {
             Some(edge) => {
@@ -1068,9 +1061,9 @@ impl PagerState {
                     self.boundary.clear();
                 }
                 self.boundary.extend(
-                    docs.iter()
-                        .filter(|d| d.timestamp() == Some(edge))
-                        .filter_map(|d| d.id().map(str::to_owned)),
+                    page.iter()
+                        .filter(|d| time(d) == Some(edge))
+                        .filter_map(|d| raw_id(d).map(str::to_owned)),
                 );
                 if self.spec.ascending {
                     self.spec.since = Some(edge);
@@ -1081,8 +1074,10 @@ impl PagerState {
             None => self.done = true,
         }
 
+        let consumed = page.len();
+        let docs: Vec<T> = decode_docs(page);
         self.remaining = Some(remaining - docs.len());
-        if docs.is_empty() || !full_page || self.remaining == Some(0) {
+        if consumed == 0 || !full_page || self.remaining == Some(0) {
             self.done = true;
         }
         Ok(docs)
@@ -1187,6 +1182,25 @@ async fn fetch_raw_with(
     }
 }
 
+/// The id of a raw document (`identifier`, else `_id`), as [`Document::id`] reads it.
+pub(crate) fn raw_id(doc: &Value) -> Option<&str> {
+    doc.get("identifier")
+        .or_else(|| doc.get("_id"))
+        .and_then(Value::as_str)
+}
+
+/// The time of a raw document on the field `api` range-filters and sorts on, so pagination
+/// bounds agree with what the server (or the v1 fallback filter) compares against.
+pub(crate) fn query_time(doc: &Value, name: CollectionName, api: Api) -> Option<Timestamp> {
+    match api {
+        Api::V3 => doc
+            .get(name.v3_date_field().0)
+            .and_then(Timestamp::from_value),
+        Api::V1 => doc_time(doc, name),
+    }
+}
+
+/// The time API v1 filters and sorts on: the collection's v1 date field first.
 fn doc_time(doc: &Value, name: CollectionName) -> Option<Timestamp> {
     let fields: &[&str] = match name {
         CollectionName::Entries | CollectionName::Settings => &["date"],
@@ -1212,8 +1226,8 @@ fn matches_base(doc: &Value, filter: &Filter) -> bool {
 pub(crate) fn decode_docs<T: serde::de::DeserializeOwned>(values: Vec<Value>) -> Vec<T> {
     values
         .into_iter()
-        .filter_map(|value| {
-            match serde_path_to_error::deserialize::<_, T>(&value) {
+        .filter_map(
+            |value| match serde_path_to_error::deserialize::<_, T>(&value) {
                 Ok(doc) => Some(doc),
                 Err(_err) => {
                     #[cfg(feature = "tracing")]
@@ -1221,13 +1235,13 @@ pub(crate) fn decode_docs<T: serde::de::DeserializeOwned>(values: Vec<Value>) ->
                         target: "cinnamon",
                         path = %_err.path(),
                         error = %_err.inner(),
-                        id = value.get("identifier").or_else(|| value.get("_id")).and_then(serde_json::Value::as_str),
+                        id = raw_id(&value),
                         "skipping a document that does not decode"
                     );
                     None
                 }
-            }
-        })
+            },
+        )
         .collect()
 }
 

@@ -250,8 +250,8 @@ pub trait Document:
         self.meta().id()
     }
 
-    /// Fills the fields a write needs: `date`/`created_at` consistency, `app`, `utcOffset`
-    /// and the deterministic API v3 `identifier`.
+    /// Fills the fields a write needs: `date`/`created_at` consistency, `app`, a default
+    /// `device`, `utcOffset` and the deterministic API v3 `identifier`.
     #[doc(hidden)]
     fn prepare_for_upload(&mut self, app: &str);
 }
@@ -325,7 +325,7 @@ macro_rules! impl_document {
             }
             )?
             fn prepare_for_upload(&mut self, app: &str) {
-                self.fill_defaults();
+                self.fill_defaults(app);
                 crate::model::prepare_meta(self, app);
             }
         }
@@ -336,6 +336,30 @@ pub(crate) use impl_document;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn uploads_default_the_device_to_the_app_name() {
+        let mut carbs = Treatment::carbs(5.0);
+        carbs.prepare_for_upload("my-app");
+        assert_eq!(carbs.device.as_deref(), Some("my-app"));
+        let at = carbs.time().unwrap_or(Timestamp::EPOCH);
+        assert_eq!(
+            carbs.meta.identifier,
+            Some(compute_identifier(
+                Some("my-app"),
+                at,
+                Some("Carb Correction")
+            ))
+        );
+
+        let mut sgv = Sgv::new(100.0, Timestamp::from_millis(1)).with_device("xDrip");
+        sgv.prepare_for_upload("my-app");
+        assert_eq!(
+            sgv.device.as_deref(),
+            Some("xDrip"),
+            "an explicit device wins"
+        );
+    }
 
     #[test]
     fn identifier_matches_the_server() {

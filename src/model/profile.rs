@@ -84,7 +84,7 @@ impl ProfileStore {
         self.store.get(self.default_profile.as_deref()?)
     }
 
-    fn fill_defaults(&mut self) {
+    fn fill_defaults(&mut self, _app: &str) {
         let t = self
             .created_at
             .or(self.start_date)

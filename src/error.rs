@@ -164,9 +164,8 @@ impl Error {
     pub(crate) fn from_reqwest(err: reqwest::Error) -> Self {
         if err.is_timeout() {
             Self::Timeout
-        } else if err.is_decode() {
-            Self::Transport(Box::new(err))
         } else {
+            // URLs can carry secrets: the JWT exchange puts the access token in the path.
             Self::Transport(Box::new(err.without_url()))
         }
     }

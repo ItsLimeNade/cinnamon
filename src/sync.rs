@@ -39,7 +39,7 @@ use chrono::Duration;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::api::collection::{ListSpec, fetch_raw};
+use crate::api::collection::{ListSpec, fetch_raw, query_time, raw_id};
 use crate::client::transport::{Request, decode_value};
 use crate::client::{Api, Client, Support};
 use crate::error::{Error, Result};
@@ -107,10 +107,7 @@ impl SyncDoc {
     /// The document identifier (`identifier`, else `_id`).
     #[must_use]
     pub fn identifier(&self) -> Option<&str> {
-        self.doc
-            .get("identifier")
-            .or_else(|| self.doc.get("_id"))
-            .and_then(Value::as_str)
+        raw_id(&self.doc)
     }
 
     /// Decodes into a typed model, e.g. `doc.decode::<Treatment>()` or
@@ -202,9 +199,15 @@ impl Sync {
     ///
     /// # Errors
     ///
-    /// Transport and authorization errors. The cursor only advances past data that was
-    /// returned, so a failed poll can simply be retried.
+    /// Transport and authorization errors. A failed (or cancelled) poll leaves the session
+    /// untouched, so it can simply be retried.
     pub async fn poll(&mut self) -> Result<SyncBatch> {
+        // Work on copies and commit only once every collection succeeded: committing per
+        // collection would advance past events that a later failure never delivers.
+        let mut cursors = self.cursor.clone();
+        let mut boundaries = self.boundary.clone();
+        let mut recents = self.recent.clone();
+
         let inner = &self.client.inner;
         let v3 = inner.pick_api(Support::Both, "sync").await? == Api::V3;
         let last_modified = if v3 {
@@ -226,12 +229,8 @@ impl Sync {
                 _ if v3 => Api::V3,
                 _ => Api::V1,
             };
-            let mut cursor = self
-                .cursor
-                .collections
-                .get(&name)
-                .copied()
-                .unwrap_or_default();
+            let mut cursor = cursors.collections.get(&name).copied().unwrap_or_default();
+            let recent = recents.entry(name).or_default();
 
             if api == Api::V3 {
                 match cursor.history {
@@ -249,7 +248,9 @@ impl Sync {
                             .and_then(|l| l.collections.get(name.name()))
                             .is_none_or(|newest| *newest > since);
                         if changed {
-                            self.pull_history(name, &mut cursor, &mut events).await?;
+                            let boundary = boundaries.entry(name).or_default();
+                            self.pull_history(name, &mut cursor, boundary, recent, &mut events)
+                                .await?;
                         }
                     }
                 }
@@ -257,11 +258,14 @@ impl Sync {
                 cursor.date = Some(self.backfill_start());
             }
 
-            self.pull_by_date(name, api, &mut cursor, &mut events)
+            self.pull_by_date(name, api, &mut cursor, recent, &mut events)
                 .await?;
-            self.cursor.collections.insert(name, cursor);
+            cursors.collections.insert(name, cursor);
         }
 
+        self.cursor = cursors;
+        self.boundary = boundaries;
+        self.recent = recents;
         Ok(SyncBatch {
             events,
             cursor: self.cursor.clone(),
@@ -273,14 +277,14 @@ impl Sync {
     }
 
     async fn pull_history(
-        &mut self,
+        &self,
         name: CollectionName,
         cursor: &mut CollectionCursor,
+        boundary: &mut HashSet<String>,
+        recent: &mut HashMap<String, i64>,
         events: &mut Vec<SyncEvent>,
     ) -> Result<()> {
         let inner = &self.client.inner;
-        let boundary = self.boundary.entry(name).or_default();
-        let recent = self.recent.entry(name).or_default();
         for _ in 0..MAX_PAGES {
             let Some(since) = cursor.history else { break };
             // `history/{t}` is exclusive; ask from t-1 and drop what was already emitted at t
@@ -321,7 +325,8 @@ impl Sync {
                     if deleted {
                         recent.remove(id);
                     } else {
-                        let date = doc_date(&doc, name).map_or(i64::MAX, Timestamp::as_millis);
+                        let date =
+                            query_time(&doc, name, Api::V3).map_or(i64::MAX, Timestamp::as_millis);
                         recent.insert(id.clone(), date);
                     }
                 }
@@ -346,10 +351,11 @@ impl Sync {
     }
 
     async fn pull_by_date(
-        &mut self,
+        &self,
         name: CollectionName,
         api: Api,
         cursor: &mut CollectionCursor,
+        recent: &mut HashMap<String, i64>,
         events: &mut Vec<SyncEvent>,
     ) -> Result<()> {
         let Some(from) = cursor.date else {
@@ -358,7 +364,6 @@ impl Sync {
         let horizon = Timestamp::now().as_millis() + FUTURE_TOLERANCE_MS;
         let mut since = Timestamp::from_millis(from.as_millis().saturating_sub(DATE_OVERLAP_MS));
         let mut newest = from;
-        let recent = self.recent.entry(name).or_default();
         for _ in 0..MAX_PAGES {
             let spec = ListSpec {
                 filter: Filter::new(),
@@ -372,9 +377,8 @@ impl Sync {
             let docs = fetch_raw(&self.client, name, &spec, api).await?;
             let full = docs.len() >= PAGE;
             let mut page_max = since;
-            let mut fresh = 0usize;
             for doc in docs {
-                let date = doc_date(&doc, name);
+                let date = query_time(&doc, name, api);
                 if let Some(d) = date {
                     page_max = page_max.max(d);
                     if d.as_millis() <= horizon {
@@ -386,13 +390,14 @@ impl Sync {
                     continue;
                 }
                 recent.insert(id, date.map_or(i64::MAX, Timestamp::as_millis));
-                fresh += 1;
                 events.push(SyncEvent::Upsert(SyncDoc {
                     collection: name,
                     doc,
                 }));
             }
-            if !full || fresh == 0 || page_max == since {
+            // A full page of already-seen documents (a busy overlap window) is no reason to
+            // stop: only a page that cannot move the bound forward is.
+            if !full || page_max == since {
                 break;
             }
             since = page_max;
@@ -406,20 +411,7 @@ impl Sync {
 }
 
 fn identifier(doc: &Value) -> Option<String> {
-    doc.get("identifier")
-        .or_else(|| doc.get("_id"))
-        .and_then(Value::as_str)
-        .map(str::to_owned)
-}
-
-fn doc_date(doc: &Value, name: CollectionName) -> Option<Timestamp> {
-    let fields: &[&str] = match name {
-        CollectionName::Entries | CollectionName::Settings => &["date"],
-        _ => &["created_at", "date"],
-    };
-    fields
-        .iter()
-        .find_map(|f| doc.get(*f).and_then(Timestamp::from_value))
+    raw_id(doc).map(str::to_owned)
 }
 
 #[cfg(test)]
@@ -437,7 +429,10 @@ mod tests {
             },
         );
         let json = serde_json::to_string(&cursor).unwrap_or_default();
-        assert_eq!(json, r#"{"collections":{"treatments":{"history":1714564800000}}}"#);
+        assert_eq!(
+            json,
+            r#"{"collections":{"treatments":{"history":1714564800000}}}"#
+        );
         let back: SyncCursor = serde_json::from_str(&json).unwrap_or_default();
         assert_eq!(back, cursor);
     }

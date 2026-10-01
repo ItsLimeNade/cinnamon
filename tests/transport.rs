@@ -1,12 +1,17 @@
-//! Transport behavior that a healthy Nightscout cannot easily produce: retries, redirects,
-//! JWT refresh, credential placement and decode errors. Real API semantics are covered by
-//! the e2e suite (`tests/e2e.rs`) instead of mocks.
+//! Behavior that a healthy Nightscout cannot easily produce: retries, redirects, JWT
+//! refresh, credential placement, decode errors, failures in the middle of a sync, and
+//! paging over more data than an e2e test can cheaply create. Real API semantics are
+//! covered by the e2e suite (`tests/e2e.rs`) instead of mocks.
 #![allow(clippy::unwrap_used, missing_docs)]
 
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use cinnamon::model::{CollectionName, Sgv};
+use cinnamon::sync::SyncCursor;
 use cinnamon::{ApiVersion, Client, Error, RetryPolicy};
-use serde_json::json;
+use futures_util::TryStreamExt;
+use serde_json::{Value, json};
 use wiremock::matchers::{header, header_exists, method, path, path_regex};
 use wiremock::{Mock, MockServer, Request, ResponseTemplate};
 
@@ -339,4 +344,160 @@ impl LocalClient for Client {
             .build()
             .unwrap()
     }
+}
+
+/// `count` sgvs, newest first: `newest`, `newest - step_ms`, …
+fn sgvs(count: i64, newest: i64, step_ms: i64) -> Vec<Value> {
+    (0..count)
+        .map(|i| {
+            json!({"_id": format!("{i:024x}"), "type": "sgv", "sgv": 100, "date": newest - i * step_ms})
+        })
+        .collect()
+}
+
+/// An API v1 `entries.json` over `docs` that honors `count`, the `date` bounds and
+/// `sort[date]` the way Nightscout does.
+async fn mount_v1_entries(server: &MockServer, docs: Arc<Mutex<Vec<Value>>>) {
+    Mock::given(method("GET"))
+        .and(path("/api/v1/entries.json"))
+        .respond_with(move |req: &Request| {
+            let param = |key: &str| {
+                req.url
+                    .query_pairs()
+                    .find(|(k, _)| k == key)
+                    .map(|(_, v)| v.into_owned())
+            };
+            let bound = |key: &str| param(key).and_then(|v| v.parse::<i64>().ok());
+            let (gte, lte) = (bound("find[date][$gte]"), bound("find[date][$lte]"));
+            let count = bound("count").unwrap_or(10) as usize;
+            let mut page: Vec<Value> = docs
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|d| {
+                    let t = d["date"].as_i64().unwrap();
+                    gte.is_none_or(|g| t >= g) && lte.is_none_or(|l| t <= l)
+                })
+                .cloned()
+                .collect();
+            page.sort_by_key(|d| d["date"].as_i64());
+            if param("sort[date]").as_deref() != Some("1") {
+                page.reverse();
+            }
+            page.truncate(count);
+            ResponseTemplate::new(200).set_body_json(page)
+        })
+        .mount(server)
+        .await;
+}
+
+const NOW: i64 = 1_758_790_800_000;
+
+#[tokio::test]
+async fn lists_above_one_page_are_paged_not_capped() {
+    let server = MockServer::start().await;
+    mount_v1_entries(&server, Arc::new(Mutex::new(sgvs(2500, NOW, 1000)))).await;
+    let ns = Client::new_local_for_tests(&server.uri());
+    let docs = ns.entries().sgv().list().limit(2000).await.unwrap();
+    assert_eq!(docs.len(), 2000);
+    assert!(
+        docs.windows(2).all(|w| w[0].date > w[1].date),
+        "newest first, no repeats"
+    );
+}
+
+#[tokio::test]
+async fn stream_skip_applies_to_the_first_page_only() {
+    let server = MockServer::start().await;
+    mount_v1_entries(&server, Arc::new(Mutex::new(sgvs(100, NOW, 1000)))).await;
+    let ns = Client::new_local_for_tests(&server.uri());
+    let docs: Vec<Sgv> = ns
+        .entries()
+        .sgv()
+        .list()
+        .skip(2)
+        .limit(20)
+        .page_size(5)
+        .stream()
+        .try_collect()
+        .await
+        .unwrap();
+    let dates: Vec<i64> = docs.iter().map(|d| d.date.as_millis()).collect();
+    let expected: Vec<i64> = (2..22).map(|i| NOW - i * 1000).collect();
+    assert_eq!(dates, expected);
+}
+
+#[tokio::test]
+async fn a_page_that_does_not_decode_does_not_end_the_stream() {
+    let server = MockServer::start().await;
+    let mut docs = sgvs(10, NOW, 1000);
+    for doc in &mut docs[..5] {
+        doc.as_object_mut().unwrap().remove("sgv");
+    }
+    mount_v1_entries(&server, Arc::new(Mutex::new(docs))).await;
+    let ns = Client::new_local_for_tests(&server.uri());
+    let docs: Vec<Sgv> = ns
+        .entries()
+        .sgv()
+        .list()
+        .limit(usize::MAX)
+        .page_size(5)
+        .stream()
+        .try_collect()
+        .await
+        .unwrap();
+    assert_eq!(
+        docs.len(),
+        5,
+        "the five readable readings behind the broken page"
+    );
+}
+
+#[tokio::test]
+async fn a_failed_sync_poll_is_retried_without_losing_events() {
+    let server = MockServer::start().await;
+    let now = chrono::Utc::now().timestamp_millis();
+    mount_v1_entries(&server, Arc::new(Mutex::new(sgvs(1, now - 60_000, 1)))).await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/treatments.json"))
+        .respond_with(ResponseTemplate::new(500))
+        .up_to_n_times(1)
+        .with_priority(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/treatments.json"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
+        .mount(&server)
+        .await;
+
+    let ns = Client::new_local_for_tests(&server.uri());
+    let mut sync = ns
+        .sync(SyncCursor::default())
+        .collections([CollectionName::Entries, CollectionName::Treatments]);
+    assert!(sync.poll().await.is_err());
+    assert_eq!(sync.cursor(), &SyncCursor::default(), "nothing committed");
+    let batch = sync.poll().await.unwrap();
+    assert_eq!(batch.events.len(), 1, "{:?}", batch.events);
+}
+
+#[tokio::test]
+async fn sync_moves_past_a_full_page_of_already_seen_documents() {
+    let server = MockServer::start().await;
+    let now = chrono::Utc::now().timestamp_millis();
+    // 600 readings inside the last five minutes: more than one page (500) sits in the
+    // ten-minute overlap every poll re-reads.
+    let docs = Arc::new(Mutex::new(sgvs(600, now - 60_000, 400)));
+    mount_v1_entries(&server, Arc::clone(&docs)).await;
+    let ns = Client::new_local_for_tests(&server.uri());
+    let mut sync = ns
+        .sync(SyncCursor::default())
+        .collections([CollectionName::Entries]);
+    assert_eq!(sync.poll().await.unwrap().events.len(), 600);
+
+    docs.lock().unwrap().push(json!(
+        {"_id": "ffffffffffffffffffffffff", "type": "sgv", "sgv": 180, "date": now - 30_000}
+    ));
+    let batch = sync.poll().await.unwrap();
+    assert_eq!(batch.events.len(), 1, "{:?}", batch.events);
 }

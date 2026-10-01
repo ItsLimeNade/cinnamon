@@ -107,7 +107,7 @@ impl Food {
         }
     }
 
-    fn fill_defaults(&mut self) {
+    fn fill_defaults(&mut self, _app: &str) {
         let t = self.created_at.or(self.date).unwrap_or_else(Timestamp::now);
         self.created_at.get_or_insert(t);
         self.date.get_or_insert(t);

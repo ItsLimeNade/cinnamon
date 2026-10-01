@@ -127,7 +127,8 @@ impl DeviceStatus {
             .or(self.uploader_battery)
     }
 
-    fn fill_defaults(&mut self) {
+    fn fill_defaults(&mut self, app: &str) {
+        self.device.get_or_insert_with(|| app.to_owned());
         match (self.created_at, self.date) {
             (None, None) => {
                 let now = Timestamp::now();

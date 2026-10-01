@@ -39,7 +39,7 @@ impl Setting {
         }
     }
 
-    fn fill_defaults(&mut self) {
+    fn fill_defaults(&mut self, _app: &str) {
         self.date.get_or_insert_with(Timestamp::now);
     }
 }

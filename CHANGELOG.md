@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- A sync poll that failed part-way still advanced the cursor for the collections before
+  the failure, so retrying lost their events. A failed poll now changes nothing.
+- A sync could stop advancing when more than one page of documents fell inside its
+  ten-minute overlap window.
+- API v1 lists with a `limit` above 1000 returned only 1000 documents. Lists above one page
+  now page by date (like `stream`) on both APIs instead of by `skip`.
+- `stream()` re-applied `skip` on every page, dropping documents at each page boundary.
+- A page of documents that did not decode ended a stream early; pagination now follows the
+  raw documents on the field the query sorts on.
+- A network drop while a realtime subscription reconnected was reported as `Unauthorized`
+  and stopped the subscription for good. Only an explicit refusal stops it now.
+- An `/alarm` event whose payload did not decode was silently dropped. It is now delivered
+  with the event's own severity, and alarm levels accept numeric strings.
+- JWT expiry was judged with the local wall clock, so clock skew could keep an expired token
+  or force an exchange on every request. It now uses the token's lifetime.
+
+### Changed
+- Uploads default `device` to the client's app name (as documented), which also feeds the
+  API v3 identifier.
+
+### Security
+- Transport errors never include the request URL, which can contain the access token.
+
 ## 2.0.0-alpha.1 (unreleased)
 
 This is a rewrite. See [MIGRATION.md](MIGRATION.md).

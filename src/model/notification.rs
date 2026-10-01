@@ -57,8 +57,11 @@ impl Serialize for Level {
 }
 
 impl<'de> Deserialize<'de> for Level {
+    /// Accepts integers, floats and numeric strings.
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        i64::deserialize(d).map(Self::from_i64)
+        super::de::int::deserialize(d)?
+            .map(Self::from_i64)
+            .ok_or_else(|| serde::de::Error::custom("expected a numeric alarm level"))
     }
 }
 

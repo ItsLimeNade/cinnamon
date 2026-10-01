@@ -183,9 +183,14 @@ impl Jwt {
         }
     }
 
+    /// Measured on the local monotonic clock against the token's own lifetime (`exp - iat`),
+    /// so a skewed system clock can neither keep an expired JWT nor force an exchange on
+    /// every request.
     pub(crate) fn is_fresh(&self) -> bool {
-        let margin = chrono::Duration::from_std(Self::REFRESH_MARGIN).unwrap_or_default();
-        Utc::now() + margin < self.session.expires_at
+        let lifetime = (self.session.expires_at - self.session.issued_at)
+            .to_std()
+            .unwrap_or_default();
+        self.obtained.elapsed() + Self::REFRESH_MARGIN < lifetime
     }
 }
 
@@ -211,6 +216,23 @@ mod tests {
             .unwrap_or_default();
         assert_eq!(hash, "30143ac058893ef38d5e090c9719103474b9ec19");
         assert_eq!(format!("{creds:?}"), "Credentials::ApiSecret(<redacted>)");
+    }
+
+    #[test]
+    fn jwt_freshness_ignores_clock_skew() {
+        let jwt = |iat: i64, exp: i64| {
+            Jwt::from_response(JwtResponse {
+                token: "jwt".into(),
+                sub: None,
+                permission_groups: Vec::new(),
+                iat,
+                exp,
+            })
+        };
+        // An 8-hour token from a server whose clock says 1990 is still fresh here...
+        assert!(jwt(631_152_000, 631_152_000 + 8 * 3600).is_fresh());
+        // ...and a token living less than the refresh margin never is.
+        assert!(!jwt(631_152_000, 631_152_000 + 60).is_fresh());
     }
 
     #[test]

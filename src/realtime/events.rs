@@ -114,20 +114,47 @@ pub enum AlarmEvent {
 
 impl AlarmEvent {
     pub(crate) fn decode(name: &str, mut args: Vec<Value>) -> Option<Self> {
+        let (wrap, level): (fn(Alarm) -> Self, Level) = match name {
+            "alarm" => (Self::Alarm, Level::Warn),
+            "urgent_alarm" => (Self::Urgent, Level::Urgent),
+            "announcement" => (Self::Announcement, Level::Info),
+            "notification" => (Self::Notification, Level::Info),
+            "clear_alarm" => (Self::Cleared, Level::Info),
+            _ => return None,
+        };
         let payload = if args.is_empty() {
             Value::Null
         } else {
             args.swap_remove(0)
         };
-        let alarm: Alarm = serde_json::from_value(payload).ok()?;
-        Some(match name {
-            "alarm" => Self::Alarm(alarm),
-            "urgent_alarm" => Self::Urgent(alarm),
-            "announcement" => Self::Announcement(alarm),
-            "notification" => Self::Notification(alarm),
-            "clear_alarm" => Self::Cleared(alarm),
-            _ => return None,
-        })
+        // Never drop an alarm over its payload: fall back to the event's own severity.
+        let has_level = payload.get("level").is_some();
+        let mut alarm = serde_json::from_value::<Alarm>(payload.clone())
+            .unwrap_or_else(|_| Alarm::bare(level, payload));
+        if !has_level {
+            alarm.level = level;
+        }
+        Some(wrap(alarm))
+    }
+}
+
+impl Alarm {
+    /// An alarm built from whatever a payload that does not decode still offers.
+    fn bare(level: Level, payload: Value) -> Self {
+        let text = |key: &str| payload.get(key).and_then(Value::as_str).map(str::to_owned);
+        Self {
+            level,
+            title: text("title"),
+            message: text("message"),
+            group: text("group"),
+            event_name: text("eventName"),
+            is_announcement: None,
+            plugin: None,
+            extra: match payload {
+                Value::Object(map) => map,
+                _ => Extra::new(),
+            },
+        }
     }
 }
 
@@ -232,5 +259,24 @@ mod tests {
             ],
         );
         assert!(matches!(urgent, Some(AlarmEvent::Urgent(ref a)) if a.level == Level::Urgent));
+    }
+
+    #[test]
+    fn alarms_are_never_dropped_over_their_payload() {
+        let warn = AlarmEvent::decode("alarm", vec![json!({"level": "1", "title": "High"})]);
+        assert!(matches!(warn, Some(AlarmEvent::Alarm(ref a)) if a.level == Level::Warn));
+
+        let unreadable = AlarmEvent::decode(
+            "urgent_alarm",
+            vec![json!({"level": "loud", "title": "Urgent LOW"})],
+        );
+        assert!(matches!(
+            unreadable,
+            Some(AlarmEvent::Urgent(ref a))
+                if a.level == Level::Urgent && a.title.as_deref() == Some("Urgent LOW")
+        ));
+
+        let empty = AlarmEvent::decode("urgent_alarm", Vec::new());
+        assert!(matches!(empty, Some(AlarmEvent::Urgent(ref a)) if a.level == Level::Urgent));
     }
 }

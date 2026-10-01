@@ -35,7 +35,8 @@ pub(crate) enum Incoming {
     Event { name: String, args: Vec<Value> },
     /// `43…<id>[args…]`
     Ack { id: u64, args: Vec<Value> },
-    /// The server closed the namespace or the connection.
+    /// The server disconnected the namespace (`41`), which is how Nightscout rejects root
+    /// namespace credentials. Network failures are errors instead, so they stay retryable.
     Disconnected,
 }
 
@@ -182,16 +183,20 @@ impl Socket {
     }
 
     /// Next event or ack on this namespace, answering heartbeats along the way.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Timeout`] when the server stops pinging, and [`Error::Transport`] when the
+    /// connection fails or Engine.IO closes the session.
     pub(crate) async fn next(&mut self) -> Result<Incoming> {
         loop {
-            let text = match self.next_text().await {
-                Ok(text) => text,
-                Err(_) => return Ok(Incoming::Disconnected),
-            };
+            let text = self.next_text().await?;
             let bytes = text.as_bytes();
             match bytes.first() {
                 Some(b'2') => self.send("3".into()).await?,
-                Some(b'1') => return Ok(Incoming::Disconnected),
+                Some(b'1') => {
+                    return Err(realtime_error("the server closed the Engine.IO session"));
+                }
                 Some(b'4') => {
                     if let Some(incoming) = self.parse_socketio(&text[1..]) {
                         return Ok(incoming);
@@ -238,6 +243,9 @@ impl Socket {
     /// Emits `event` and waits (up to `timeout`) for its ack. Events that arrive first
     /// (Nightscout sends the initial `dataUpdate` before acknowledging `authorize`) are
     /// returned alongside the ack.
+    ///
+    /// Only a namespace disconnect in reply means the credentials were rejected; a dropped
+    /// connection is returned as a transport error so reconnect loops keep trying.
     pub(crate) async fn call(
         &mut self,
         event: &str,
@@ -257,7 +265,7 @@ impl Socket {
                 Incoming::Disconnected => {
                     return Err(Error::Unauthorized {
                         message: format!(
-                            "Nightscout closed the socket after `{event}` (credentials rejected)"
+                            "Nightscout disconnected the socket after `{event}` (credentials rejected)"
                         ),
                     });
                 }
@@ -268,5 +276,55 @@ impl Socket {
 
     pub(crate) async fn close(mut self) {
         let _ = self.ws.close(None).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use tokio::net::TcpListener;
+
+    /// A one-shot socket.io server: completes the handshake, reads one event, then sends
+    /// `reply` (if any) and hangs up.
+    async fn server(reply: Option<&'static str>) -> Url {
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let addr = listener.local_addr().expect("address");
+        tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.expect("accept");
+            let mut ws = tokio_tungstenite::accept_async(tcp).await.expect("upgrade");
+            let open = r#"0{"sid":"e","pingInterval":25000,"pingTimeout":20000}"#;
+            ws.send(Message::text(open)).await.expect("open");
+            let _connect = ws.next().await;
+            ws.send(Message::text(r#"40{"sid":"s"}"#))
+                .await
+                .expect("connect");
+            let _event = ws.next().await;
+            if let Some(reply) = reply {
+                ws.send(Message::text(reply)).await.expect("reply");
+            }
+        });
+        Url::parse(&format!("http://{addr}/")).expect("url")
+    }
+
+    async fn authorize(
+        reply: Option<&'static str>,
+    ) -> Result<(Vec<Value>, Vec<(String, Vec<Value>)>)> {
+        let mut socket = Socket::connect(&server(reply).await, "/", "test").await?;
+        socket
+            .call("authorize", vec![json!({})], Duration::from_secs(5))
+            .await
+    }
+
+    #[tokio::test]
+    async fn a_dropped_connection_is_retryable_not_a_rejection() {
+        let res = authorize(None).await;
+        assert!(matches!(res, Err(Error::Transport(_))), "{res:?}");
+    }
+
+    #[tokio::test]
+    async fn a_namespace_disconnect_is_a_rejection() {
+        let res = authorize(Some("41")).await;
+        assert!(matches!(res, Err(Error::Unauthorized { .. })), "{res:?}");
     }
 }
