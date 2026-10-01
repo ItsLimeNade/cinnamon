@@ -83,6 +83,8 @@ jobs:
         nightscout: ["15.0.8"]
     env:
       NIGHTSCOUT_TAG: ${{ matrix.nightscout }}
+      # Without this every e2e test returns immediately and the job passes untested.
+      CINNAMON_E2E: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
